@@ -135,9 +135,17 @@ and only offers newer ones.
 on probation and is confirmed once the game is up; if it crashes before that,
 the bootloader goes back to the previous one.
 
-**Size.** Each slot is 7.94 MB and the app is ~7.9 MB, almost all of it the
-door and prize images. A build that no longer fits fails with "app partition
-is too small" -- shrink or compress the art before adding much more.
+**Size.** Each slot is 7.94 MB. The door frames, prizes and police lights
+are 6.7 MB as raw pixels, so they are stored LZ4-compressed (2.6 MB) and
+unpacked into PSRAM when drawn. After every EEZ Studio export (which writes
+them raw again) run:
+
+```bash
+pip install lz4
+python tools/compress_images.py
+```
+
+The build stops with that hint if it finds an uncompressed image.
 
 ## Building and flashing
 

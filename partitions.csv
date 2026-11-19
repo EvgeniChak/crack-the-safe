@@ -1,10 +1,9 @@
 # Crack the Safe partition table -- 16 MB flash, two app slots for updates
 # over Wi-Fi (see main/net.c).
 #
-# The unlock animation's door frames and the vault art are compiled in as
-# LVGL images, so the app is ~7.6 MB: each slot is the most that two fit in
-# 16 MB, 7.94 MB. A build that outgrows it fails at link time ("app partition
-# is too small") -- then shrink the art or move it to a data partition.
+# Each slot is the most that two fit in 16 MB, 7.94 MB. The app is ~4 MB:
+# the door frames and vault art are compiled in as LZ4-compressed LVGL images
+# (tools/compress_images.py); raw, they alone would be 6.7 MB.
 #
 # nvs keeps its old place and size, so the saved volume survives the switch.
 #

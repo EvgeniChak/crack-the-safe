@@ -80,3 +80,15 @@ idf_component_register(
 )
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_HAVE_UI=${APP_HAVE_UI})
+
+# The images in main/ui/ must be LZ4-compressed (tools/compress_images.py):
+# raw, they do not fit an update slot. An EEZ Studio export writes them raw
+# again, so check on every build and say what to run.
+if(UI_IMAGES)
+    idf_build_get_property(python PYTHON)
+    add_custom_target(check_ui_images
+        COMMAND ${python} ${PROJECT_DIR}/tools/compress_images.py --check
+                --dir ${CMAKE_CURRENT_SOURCE_DIR}/${UI_DIR}
+        VERBATIM)
+    add_dependencies(${COMPONENT_LIB} check_ui_images)
+endif()

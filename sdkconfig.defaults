@@ -64,8 +64,18 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
 # Browsers send long headers.
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_HTTPD_MAX_URI_LEN=512
-# Size: the app has to fit a 7.94 MB update slot (partitions.csv).
-CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+# Speed over size: with the images compressed the app is well under its
+# 7.94 MB update slot (partitions.csv).
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
 # LVGL keeps CPU 1 busy while an update writes flash (the cache is off for
 # both cores then); its idle task starving is expected, not a hang.
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+# ---- Compressed images (tools/compress_images.py) ------------------------
+# The images in main/ui are LZ4 blocks; LVGL unpacks one into PSRAM when it
+# is drawn and keeps recent ones in a 2 MB cache, so the door animation
+# and the prize screen do not unpack on every frame.
+CONFIG_LV_BIN_DECODER_RAM_LOAD=y
+CONFIG_LV_USE_LZ4=y
+CONFIG_LV_USE_LZ4_INTERNAL=y
+CONFIG_LV_CACHE_DEF_SIZE=2097152

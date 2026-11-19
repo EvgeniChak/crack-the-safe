@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "cJSON.h"
 #include "esp_app_desc.h"
@@ -16,6 +17,7 @@
 #include "esp_https_ota.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_sntp.h"
 #include "esp_netif.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -238,6 +240,14 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data)
                 s_st.rssi = rssi);
         ESP_LOGI(TAG, "connected, http://" NET_HOSTNAME ".local  http://" IPSTR,
                  IP2STR(&e->ip_info.ip));
+        if (!esp_sntp_enabled()) {
+            /* The date, for the Daily safe (stats_today()). Israel time. */
+            setenv("TZ", "IST-2IDT,M3.4.4/26,M10.5.0", 1);
+            tzset();
+            esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+            esp_sntp_setservername(0, "pool.ntp.org");
+            esp_sntp_init();
+        }
         if (!s_mdns_up && mdns_init() == ESP_OK) {
             mdns_hostname_set(NET_HOSTNAME);
             mdns_instance_name_set("Crack the Safe knob");

@@ -29,17 +29,33 @@ typedef enum {
     PRIZE_DIAMOND,
 } prize_t;
 
+/* How a round is played (game.h). Classic climbs the level table; the others
+ * use a fixed row of their own (level_for_play). */
+typedef enum {
+    PLAY_CLASSIC = 0,     /* the levels, one after another                 */
+    PLAY_PRACTICE,        /* no clock, the distance shown, misses forgiven */
+    PLAY_DAILY,           /* the same code for everyone today              */
+    PLAY_CHALLENGE,       /* a code a friend set on the settings page      */
+    PLAY_COUNT
+} play_t;
+
 typedef struct {
-    uint32_t time_ms;     /* time limit for the whole combination          */
+    uint32_t time_ms;     /* time limit for the whole combination; 0: none */
     uint8_t  feel_range;  /* the buzz starts this many detents out (>= 2)  */
     uint8_t  min_gap;     /* each number is at least this far from the one
                            * before it (and number 1 from the dial at rest);
                            * 1..GAME_POSITIONS/2                            */
     prize_t  prize;       /* what is behind the door                       */
+    uint8_t  decoy;       /* 1: a false click a few detents before each
+                           * number -- reversing on it loses               */
 } level_def_t;
 
 /** How many levels the table has. */
 int levels_count(void);
+
+/** The row a round actually uses: the level's own in Classic, a fixed row
+ *  for the other modes. */
+const level_def_t *level_for_play(play_t play, int level);
 
 /** The row for `level`, 1-based. Out of range is clamped to the first or
  *  last level, so a caller never reads past the table. */

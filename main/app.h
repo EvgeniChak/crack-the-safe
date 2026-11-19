@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "game.h"
+#include "stats.h"
 
 /** The one game. ui_game.c reads it to fill the screens. */
 extern game_t g_game;
@@ -35,6 +36,13 @@ void app_menu_new_game(void);
 void app_menu_settings(void);
 /** Back out of the menu, Settings or Headphones, one screen at a time. */
 void app_back(void);
+/** The Mode screen (play_ui.c), from the menu. */
+void app_modes_open(void);
+/** Start a new round in `play` (Daily and Challenge fetch their code). */
+void app_play(play_t play);
+/** What the last win set (records), for the reward screen. */
+const stats_win_t *app_last_win(void);
+
 /** The Wi-Fi & Update screen (net_ui.c), over Settings or the title. */
 void app_network_open(void);
 /** Nothing is being played: the title screen, no menu up. A good moment to

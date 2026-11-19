@@ -62,7 +62,15 @@ typedef enum {
     GAME_EV_TIMEOUT  = 1 << 6,  /* the clock ran out (with WRONG) */
     GAME_EV_RESET    = 1 << 7,  /* back to the title */
     GAME_EV_INSTRUCTIONS = 1 << 8,  /* the title gave way to the rules */
+    GAME_EV_MISS     = 1 << 9,  /* practice: went wrong, forgiven -- try again */
 } game_event_t;
+
+/* Why a round was lost. */
+typedef enum {
+    LOSS_WRONG = 0,     /* past the number, or reversed elsewhere */
+    LOSS_TIME,          /* the clock ran out */
+    LOSS_CAUGHT,        /* the guard saw the dial move (app.c, guard.c) */
+} loss_t;
 
 typedef struct {
     game_mode_t mode;
@@ -75,7 +83,7 @@ typedef struct {
     bool     hit_felt;                /* ... and the player was told (HIT) */
     uint16_t attempts;                /* codes tried, including the current one */
     uint8_t  level;                   /* 1..levels_count() */
-    bool     timed_out;               /* the current loss was the clock, not a turn */
+    bool     timed_out;               /* the current loss was the clock (loss == LOSS_TIME) */
     uint32_t started_ms;              /* first code dealt in this round */
     uint32_t finished_ms;             /* safe opened */
     uint32_t mode_since_ms;           /* when the current mode began */
@@ -83,6 +91,16 @@ typedef struct {
     uint32_t speed_dps;               /* smoothed turning speed, detents/s */
     bool     paused;                  /* the clock is stopped (a menu is up) */
     uint32_t paused_ms;               /* ... since this moment */
+
+    /* How rounds are played; kept across game_reset(). */
+    play_t   play;
+    uint8_t  fixed_code[GAME_CODE_LEN];  /* Daily / Challenge: the code     */
+    uint8_t  start_level;             /* Classic: where Start picks up (saved) */
+
+    loss_t   loss;                    /* why the current loss happened      */
+    uint32_t split_ms[GAME_CODE_LEN]; /* ms from the start to each number locked */
+    uint8_t  decoy[GAME_CODE_LEN];    /* false click this far before each number; 0 none */
+    uint16_t misses;                  /* practice: forgiven mistakes this round */
 } game_t;
 
 /* Turning at or below FEEL_SLOW_DPS the number always clicks; at or above
@@ -152,3 +170,23 @@ uint32_t game_time_left_ms(const game_t *g, uint32_t now_ms);
 
 /** The level the next game will be (after a win, the one after). */
 int game_next_level(const game_t *g);
+
+/** The table row the current round plays by (levels.h). */
+const level_def_t *game_params(const game_t *g);
+
+/**
+ * How the next rounds are played. Daily and Challenge need `code` (the
+ * three numbers); it is ignored otherwise. Takes effect at the next deal --
+ * call game_new() to start at once.
+ */
+void game_set_play(game_t *g, play_t play, const uint8_t code[GAME_CODE_LEN]);
+
+/** Classic: the level Start on the title begins at (saved progress). */
+void game_set_start_level(game_t *g, int level);
+
+/** The guard saw the dial move: lost, like a wrong turn. */
+unsigned game_caught(game_t *g, uint32_t now_ms);
+
+/** Today's code for the Daily safe, the same on every knob: `yyyymmdd` is
+ *  the local date, e.g. 20261119. */
+void game_daily_code(uint32_t yyyymmdd, uint8_t out[GAME_CODE_LEN]);

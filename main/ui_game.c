@@ -17,6 +17,7 @@
 
 #include "app.h"
 #include "bt_link.h"
+#include "guard.h"
 #include "knob_board.h"
 #include "screens.h"
 #include "sound.h"
@@ -118,23 +119,54 @@ static void refresh_play(void)
 
     /* The countdown, rounded UP so "0:00" only shows once time is out, and
      * red for the last ten seconds as well as in the red hold. */
+    const bool practice = g_game.play == PLAY_PRACTICE;
     const uint32_t left_ms = game_time_left_ms(&g_game, app_now_ms());
     const uint32_t left_s = (left_ms + 999) / 1000;
-    snprintf(buf, sizeof(buf), "%lu:%02lu", (unsigned long)(left_s / 60),
-             (unsigned long)(left_s % 60));
+    if (practice) {
+        /* No clock: the detents still to go to the number instead. */
+        const int d = game_distance(&g_game);
+        if (g_game.mode != GAME_PLAY || d < 0) {
+            snprintf(buf, sizeof(buf), "--");
+        } else {
+            snprintf(buf, sizeof(buf), "%d", d);
+        }
+    } else {
+        snprintf(buf, sizeof(buf), "%lu:%02lu", (unsigned long)(left_s / 60),
+                 (unsigned long)(left_s % 60));
+    }
     ui_lv_set_text(objects.timer_text, buf);
-    ui_lv_set_state_in(objects.timer_text, WRONG, (wrong || left_s <= 10) ? WRONG : 0);
+    ui_lv_set_state_in(objects.timer_text, WRONG,
+                       (wrong || (!practice && left_s <= 10)) ? WRONG : 0);
 
-    snprintf(buf, sizeof(buf), "Level %u", g_game.level ? g_game.level : 1);
-    ui_lv_set_text(objects.level_text, buf);
+    static const char *const MODE[PLAY_COUNT] = { NULL, "Practice", "Daily", "Challenge" };
+    if (MODE[g_game.play]) {
+        ui_lv_set_text(objects.level_text, MODE[g_game.play]);
+    } else {
+        snprintf(buf, sizeof(buf), "Level %u", g_game.level ? g_game.level : 1);
+        ui_lv_set_text(objects.level_text, buf);
+    }
     refresh_battery();
-    ui_lv_set_text(objects.hint_text,
-                   wrong ? (g_game.timed_out ? "Time's Up" : "Wrong")
-                         : dir > 0 ? "Turn Right" : "Turn Left");
-    ui_lv_set_hidden(objects.hint_arrow_cw, wrong || dir < 0);
-    ui_lv_set_hidden(objects.hint_arrow_ccw, wrong || dir > 0);
 
-    ui_lv_set_state_in(objects.hint_text, WRONG, wrong ? WRONG : 0);
+    /* The guard outranks the direction hint while he is about. */
+    const guard_phase_t guard = g_game.mode == GAME_PLAY ? guard_phase() : GUARD_AWAY;
+    const char *hint;
+    if (wrong) {
+        hint = g_game.loss == LOSS_CAUGHT ? "Caught!"
+             : g_game.timed_out ? "Time's Up" : "Wrong";
+    } else if (guard == GUARD_FREEZE) {
+        hint = "FREEZE!";
+    } else if (guard == GUARD_STEPS) {
+        hint = "Footsteps...";
+    } else {
+        hint = dir > 0 ? "Turn Right" : "Turn Left";
+    }
+    ui_lv_set_text(objects.hint_text, hint);
+    const bool arrows = !wrong && guard == GUARD_AWAY;
+    ui_lv_set_hidden(objects.hint_arrow_cw, !arrows || dir < 0);
+    ui_lv_set_hidden(objects.hint_arrow_ccw, !arrows || dir > 0);
+
+    ui_lv_set_state_in(objects.hint_text, WRONG,
+                       (wrong || guard == GUARD_FREEZE) ? WRONG : 0);
     ui_lv_set_state_in(objects.dial_index, WRONG, wrong ? WRONG : 0);
 
     lv_obj_t *const seg[3]     = { objects.seg1, objects.seg2, objects.seg3 };
@@ -236,17 +268,37 @@ static void refresh_unlocked(void)
     ui_lv_set_hidden(objects.reward_pill, !(open && t >= UNLOCK_REWARD_MS));
     ui_lv_set_hidden(objects.reward_again, !(open && t >= GAME_REPLAY_LOCKOUT_MS));
 
-    char buf[40];
+    char buf[64];
     /* U+00B7 middle dot is in the house Roboto range. */
     snprintf(buf, sizeof(buf), "%02u \xC2\xB7 %02u \xC2\xB7 %02u",
              g_game.code[0], g_game.code[1], g_game.code[2]);
     ui_lv_set_text(objects.reward_code, buf);
-    const uint32_t s = (game_time_left_ms(&g_game, app_now_ms()) + 999) / 1000;
-    snprintf(buf, sizeof(buf), "Level %u \xC2\xB7 %lu:%02lu left", g_game.level,
-             (unsigned long)(s / 60), (unsigned long)(s % 60));
+    /* The splits, speedcubing style: each number's own time, then the total. */
+    const uint32_t *sp = g_game.split_ms;
+    const uint32_t a = sp[0], b = sp[1] - sp[0], c = sp[2] - sp[1];
+    snprintf(buf, sizeof(buf), "%lu.%lu + %lu.%lu + %lu.%lu = %lu.%lus",
+             (unsigned long)(a / 1000), (unsigned long)(a % 1000 / 100),
+             (unsigned long)(b / 1000), (unsigned long)(b % 1000 / 100),
+             (unsigned long)(c / 1000), (unsigned long)(c % 1000 / 100),
+             (unsigned long)(sp[2] / 1000), (unsigned long)(sp[2] % 1000 / 100));
     ui_lv_set_text(objects.reward_meta, buf);
+
+    const stats_win_t *w = app_last_win();
+    if (w->pb && w->prev_ms) {
+        snprintf(buf, sizeof(buf), "New Record! Level %u", g_game.level);
+    } else if (w->daily_pb) {
+        snprintf(buf, sizeof(buf), "Daily Best!");
+    } else if (g_game.play == PLAY_CLASSIC) {
+        snprintf(buf, sizeof(buf), "Level %u Unlocked", g_game.level);
+    } else {
+        snprintf(buf, sizeof(buf), "Unlocked");
+    }
+    ui_lv_set_text(objects.reward_title, buf);
+
     const int next = game_next_level(&g_game);
-    if (next == 1) {
+    if (g_game.play != PLAY_CLASSIC) {
+        ui_lv_set_text(objects.reward_again, "Turn to Play Again");
+    } else if (next == 1) {
         ui_lv_set_text(objects.reward_again, "Turn to Play Again");
     } else {
         snprintf(buf, sizeof(buf), "Turn for Level %d", next);

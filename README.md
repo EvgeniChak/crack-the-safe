@@ -9,7 +9,7 @@ number turning left, the third turning right, and the vault door swings open
 on a pile of glowing gold.
 
 Turn past a number, or reverse anywhere else, and you lose: red and blue police
-lights flash across the dial to the wail of a siren, then a new game starts with fresh numbers and the
+lights flash across the dial, then a new game starts with fresh numbers and the
 dial back at 0.
 
 ## How to play
@@ -26,6 +26,8 @@ Beat the clock. The centre of the dial counts down the time left:
 | 6 | 0:20 | Pearls and jewellery |
 | 7 | 0:20 | A crown |
 | 8 | 0:20 | A diamond |
+
+The level table is `main/levels.c`; levels 6-8 also have false clicks.
 
 Open the safe to go up a level; after level 8 you start again at level 1. The time halves
 until level 4, then stays at 20 seconds; from level 5 the buzz starts closer to the number
@@ -97,6 +99,33 @@ white -- you will need to pair them with your phone again afterwards).
   firmware (version 3): they talk at 921600 baud, fast enough to stream the vault's sounds
   to the headphones as they play. Flash both together; with an older co-processor the
   screen says **Bluetooth is not available**.
+
+## Modes, records and the guard
+
+Touch and hold → **Mode** picks how rounds are played:
+
+| Mode | What it is |
+|---|---|
+| **Classic** | The levels (`main/levels.c`). Progress is saved: Start carries on from the level you reached; **New Game** goes back to 1. From level 6 a **false click** waits a few detents before each number -- reverse on it and you lose. |
+| **Practice** | No clock. The centre shows the detents still to go; going past the number (or reversing early) only buzzes -- back up and try again. |
+| **Daily** | Today's code, the same on every knob (from the date over Wi-Fi). 60 s, false clicks. Best time and tries are kept for the day. |
+| **Challenge** | A code a friend sets on the settings page; it is used up once cracked. |
+
+**Guard** (on the Mode screen, or the settings page): every 12-25 s of play a
+watchman comes by -- soft footsteps in the knob and "Footsteps...", then
+"FREEZE!" for 2.5 s. Turn the dial then and you are **Caught**. With the
+microphone on he also hears you: the board's PDM mic (GPIO45/46) compares the
+sound against the room's own level.
+
+**Records.** After each safe: the time of each number and the total
+(speedcubing splits), "New Record!" on a best time for the level. The
+settings page shows progress, wins and losses (and how: time, guard, which
+number), best time per level, ao5 / ao12, the last 12 solves with splits and
+a graph, and the Daily. Everything lives in NVS (`main/stats.c`).
+
+**Battery.** A minute without a touch or a turn dims the screen; after 5
+minutes (settings page: 2-30 or never) the knob goes into deep sleep and
+wakes when the dial is turned. On USB it only dims.
 
 ## Wi-Fi and updates
 

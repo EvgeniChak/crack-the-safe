@@ -13,7 +13,10 @@
 
 #include "bt_link.h"
 #include "knob_board.h"
+#include "guard.h"
 #include "net_ui.h"
+#include "play_ui.h"
+#include "power.h"
 #include "screens.h"
 #include "sound.h"
 #include "ui.h"
@@ -46,7 +49,7 @@ game_t g_game;
  * the ramp below divides by range - 1. */
 static int feel_range(void)
 {
-    const int range = level_get(g_game.level ? g_game.level : 1)->feel_range;
+    const int range = game_params(&g_game)->feel_range;
     return range < 2 ? 2 : range;
 }
 #define FEEL_MIN      30
@@ -55,6 +58,11 @@ static int feel_range(void)
 #define FEEL_HOLD_MS  4000
 
 static bool s_hum_played;
+static stats_win_t s_last_win;
+
+/* Footsteps in the knob: three soft bumps. */
+#define FX_SOFT_BUMP    7
+#define FX_STRONG_BUZZ  14
 static bool s_prize_played;
 
 uint32_t app_now_ms(void)
@@ -82,9 +90,9 @@ int app_door_frame_at(uint32_t t)
  * of whatever the game is showing. While anything is on it the game is paused:
  * no turns, taps or ticks reach it and its clock is stopped. */
 
-typedef enum { OVER_MENU, OVER_SETTINGS, OVER_HEADPHONES, OVER_NETWORK } over_t;
+typedef enum { OVER_MENU, OVER_SETTINGS, OVER_HEADPHONES, OVER_NETWORK, OVER_MODES } over_t;
 
-#define OVER_MAX 4
+#define OVER_MAX 5
 static over_t s_over[OVER_MAX];
 static int s_depth;
 
@@ -95,6 +103,7 @@ static bool over_is(over_t o)
 
 /* Not an EEZ screen: the Wi-Fi & Update page is built in net_ui.c. */
 #define SCREEN_NETWORK (-1)
+#define SCREEN_MODES   (-2)
 
 static void show_screen_for_mode(void)
 {
@@ -104,6 +113,13 @@ static void show_screen_for_mode(void)
         if (s_screen != SCREEN_NETWORK) {
             net_ui_show();
             s_screen = SCREEN_NETWORK;
+        }
+        return;
+    }
+    if (s_depth && s_over[s_depth - 1] == OVER_MODES) {
+        if (s_screen != SCREEN_MODES) {
+            play_ui_show();
+            s_screen = SCREEN_MODES;
         }
         return;
     }
@@ -175,6 +191,12 @@ static void handle(unsigned ev)
     if (ev & GAME_EV_STARTED) {
         ESP_LOGI(TAG, "new code dealt");
         knob_board_haptic(FX_SHARP_TICK);
+        guard_round(stats_guard() && g_game.play != PLAY_PRACTICE, stats_mic());
+    }
+    if (ev & GAME_EV_MISS) {
+        /* Practice: that would have lost. Back up and try again. */
+        knob_board_haptic(FX_STRONG_BUZZ);
+        ESP_LOGI(TAG, "practice miss %u", g_game.misses);
     }
     if (ev & GAME_EV_HIT) {
         sound_pin();
@@ -188,12 +210,19 @@ static void handle(unsigned ev)
          * also cuts a pulse still running) and the dial flashes police
          * lights -- silently: the siren is off. */
         knob_board_haptic_pulse(0, 0);
-        ESP_LOGI(TAG, "wrong -- attempt %u, new code", g_game.attempts);
+        if (g_game.loss == LOSS_CAUGHT) {
+            knob_board_haptic(FX_STRONG_BUZZ);
+        }
+        guard_stop();
+        stats_loss(&g_game);
+        ESP_LOGI(TAG, "lost (%d) -- attempt %u, new code", g_game.loss, g_game.attempts);
     }
     if (ev & GAME_EV_UNLOCKED) {
         static const uint8_t seq[] = { FX_STRONG_CLICK, FX_PAUSE(150), FX_RAMP_UP };
         knob_board_haptic_sequence(seq, sizeof(seq));
         sound_vault_door();
+        guard_stop();
+        s_last_win = stats_win(&g_game);
         s_hum_played = false;
         s_prize_played = false;
         ESP_LOGI(TAG, "unlocked in %u attempt(s), %lus", g_game.attempts,
@@ -218,6 +247,13 @@ static void feel(void)
     }
     const int d = game_distance(&g_game);
     const int range = feel_range();
+    /* A false click: full strength, like the number -- reversing here loses. */
+    if (g_game.stage < GAME_CODE_LEN && g_game.decoy[g_game.stage] &&
+        d == g_game.decoy[g_game.stage]) {
+        knob_board_haptic_pulse(FEEL_FULL, FEEL_HOLD_MS);
+        sound_pin();
+        return;
+    }
     if (d <= 0 || d > range) {
         knob_board_haptic_pulse(0, 0);     /* off: far away, or slipped past */
         return;
@@ -228,6 +264,13 @@ static void feel(void)
 
 void app_rotate(int detents)
 {
+    power_activity();
+    /* The guard is at the door: any movement is seen. */
+    if (!s_depth && g_game.mode == GAME_PLAY && guard_phase() == GUARD_FREEZE) {
+        handle(game_caught(&g_game, app_now_ms()));
+        ui_game_refresh();
+        return;
+    }
     if (s_depth) {
         if (over_is(OVER_HEADPHONES)) {
             ui_game_scroll_headphones(detents);
@@ -274,6 +317,10 @@ void app_menu(void)
 void app_menu_new_game(void)
 {
     s_depth = 0;                            /* the paused game is dropped */
+    if (g_game.play == PLAY_CLASSIC) {
+        stats_set_level(1);                 /* New Game: back to level 1 */
+        game_set_start_level(&g_game, 1);
+    }
     sound_stop();                           /* a siren still wailing */
     const unsigned ev = game_new(&g_game, app_now_ms());
     ESP_LOGI(TAG, "new game");
@@ -291,6 +338,42 @@ void app_back(void)
 {
     over_pop();
     ui_game_refresh();
+}
+
+void app_modes_open(void)
+{
+    if (!over_is(OVER_MODES)) {
+        over_push(OVER_MODES);
+        ui_game_refresh();
+    }
+}
+
+void app_play(play_t play)
+{
+    uint8_t code[GAME_CODE_LEN] = { 0 };
+    if (play == PLAY_DAILY) {
+        const uint32_t today = stats_today();
+        if (!today) {
+            return;                         /* no date yet: the button is grey */
+        }
+        game_daily_code(today, code);
+    } else if (play == PLAY_CHALLENGE && !stats_challenge(code)) {
+        return;
+    }
+    knob_board_haptic(FX_DOUBLE_CLICK);
+    game_set_play(&g_game, play, code);
+    game_set_start_level(&g_game, stats_level());
+    s_depth = 0;
+    sound_stop();
+    const unsigned ev = game_new(&g_game, app_now_ms());
+    ESP_LOGI(TAG, "mode %d", play);
+    handle(ev);
+    ui_game_refresh();
+}
+
+const stats_win_t *app_last_win(void)
+{
+    return &s_last_win;
 }
 
 void app_network_open(void)
@@ -355,9 +438,39 @@ void app_headphones_forget(void)
 }
 
 /* 20 ms, in the LVGL task: the red hold, the unlock timeline, the refresh. */
+/* The guard's rounds, in play time. */
+static void guard_step(void)
+{
+    static uint32_t s_last;
+    static guard_phase_t s_was;
+    const uint32_t now = app_now_ms();
+    const uint32_t dt = s_last ? now - s_last : 0;
+    s_last = now;
+    if (s_depth || g_game.mode != GAME_PLAY) {
+        return;                             /* paused or not playing */
+    }
+    const guard_phase_t ph = guard_tick(dt);
+    if (ph != s_was) {
+        if (ph == GUARD_STEPS) {
+            static const uint8_t steps[] = { FX_SOFT_BUMP, FX_PAUSE(45), FX_SOFT_BUMP,
+                                             FX_PAUSE(45), FX_SOFT_BUMP };
+            knob_board_haptic_sequence(steps, sizeof steps);
+        } else if (ph == GUARD_FREEZE) {
+            knob_board_haptic_pulse(0, 0);  /* silence: the mic is listening */
+        }
+        s_was = ph;
+    }
+    if (guard_heard()) {
+        ESP_LOGI(TAG, "the guard heard you");
+        handle(game_caught(&g_game, now));
+    }
+}
+
 static void app_timer_cb(lv_timer_t *t)
 {
     (void)t;
+    power_tick();
+    guard_step();
     if (s_depth) {
         ui_game_refresh();                  /* paused: only the menus move */
         return;
@@ -381,6 +494,9 @@ void app_init(uint32_t seed)
     bt_link_init();
     sound_init();
     game_init(&g_game, seed);
+    game_set_start_level(&g_game, stats_level());   /* carry on where we were */
+    guard_init();
+    power_init();
     ui_game_refresh();
     lv_timer_create(app_timer_cb, 20, NULL);
 }

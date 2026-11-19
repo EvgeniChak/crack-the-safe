@@ -18,6 +18,7 @@
 #include "freertos/task.h"
 
 #include "net.h"
+#include "stats.h"
 
 static const char *TAG = "web";
 
@@ -54,6 +55,28 @@ static const char PAGE[] =
 "<input id=ssid placeholder='Имя сети'><input id=pw type=password placeholder='Пароль'>"
 "<button onclick=wifi()>Подключить</button><button class=s onclick=scan()>Обновить список</button>"
 "<button class=s id=apoff onclick=\"post('/api/ap',{on:false})\">Закрыть точку настройки</button></div>"
+"<div class=c><h2>Игра</h2>"
+"<div class=r><span>Уровень (продолжение)</span><span id=glv>-</span></div>"
+"<div class=r><span>Победы / поражения</span><span id=gwl>-</span></div>"
+"<div class=r><span>Из них: время / охранник</span><span id=gto>-</span></div>"
+"<div class=r><span>Проигрыши на числе 1 / 2 / 3</span><span id=glo>-</span></div>"
+"<div class=r><span>ao5 / ao12</span><span id=gao>-</span></div>"
+"<div class=r><span>Сейф дня: лучшее / попыток</span><span id=gdy>-</span></div>"
+"<svg id=spark width=100% height=60 viewBox='0 0 300 60' preserveAspectRatio=none></svg>"
+"<p style='color:var(--mut);margin:8px 0 4px'>Лучшее время по уровням</p><div id=gbest></div>"
+"<p style='color:var(--mut);margin:8px 0 4px'>Последние сборки (сплиты)</p><div id=grec></div></div>"
+"<div class=c><h2>Вызов другу</h2>"
+"<p style='color:var(--mut);margin:0 0 6px'>Задай код (0-39). Друг выбирает Mode \u2192 Challenge на крутилке.</p>"
+"<div style='display:flex;gap:8px'><input id=c0 type=number min=0 max=39><input id=c1 type=number min=0 max=39>"
+"<input id=c2 type=number min=0 max=39></div>"
+"<div class=r><span>Сейчас</span><span id=gch>-</span></div>"
+"<button onclick=chal()>Задать</button><button class=s onclick=\"post('/api/challenge',{clear:true})\">Убрать</button></div>"
+"<div class=c><h2>Настройки игры</h2>"
+"<div class=r><span>Охранник</span><input type=checkbox id=sg style='width:auto' onchange=sset()></div>"
+"<div class=r><span>Охранник слушает микрофон</span><input type=checkbox id=sm style='width:auto' onchange=sset()></div>"
+"<div class=r><span>Сон после (мин)</span><select id=ss2 style='width:120px' onchange=sset()>"
+"<option value=0>никогда</option><option>2</option><option>5</option><option>10</option><option>30</option></select></div>"
+"<button class=s onclick=\"if(confirm('Стереть рекорды и прогресс?'))post('/api/stats_reset')\">Сбросить статистику</button></div>"
 "<p id=msg></p></main><script>"
 "const q=s=>document.querySelector(s);"
 "const U={0:'не проверялось',1:'проверяю...',2:'актуальная',3:'есть обновление',4:'устанавливаю',5:'готово, перезагрузка',6:'ошибка'};"
@@ -76,7 +99,24 @@ static const char PAGE[] =
 "async function up(){const f=q('#f').files[0];if(!f)return;msg('Загружаю '+f.name+'...');"
 "try{const r=await fetch('/api/upload',{method:'POST',body:f});msg(r.ok?'Записано, перезагрузка...':await r.text())}"
 "catch(e){msg('Обрыв загрузки')}}"
-"st();scan();setInterval(st,1500)"
+"const sec=m=>m?(m/1000).toFixed(1)+'s':'-';"
+"let G={};async function gs(){try{const g=await(await fetch('/api/stats')).json();G=g;"
+"q('#glv').textContent=g.level+' / '+g.levels;q('#gwl').textContent=g.wins+' / '+g.losses;"
+"q('#gto').textContent=g.timeouts+' / '+g.caught;q('#glo').textContent=g.lost_on.join(' / ');"
+"q('#gao').textContent=sec(g.ao5)+' / '+sec(g.ao12);"
+"q('#gdy').textContent=g.today?sec(g.daily_best)+' / '+g.daily_tries:'нет даты';"
+"q('#gbest').innerHTML=g.best_ms.map((m,i)=>'<div class=r><span>Уровень '+(i+1)+'</span><span>'+sec(m)+'</span></div>').join('');"
+"q('#grec').innerHTML=g.recent.slice().reverse().map(r=>{const s=r.split;"
+"return '<div class=r><span>Ур. '+r.level+'</span><span>'+[s[0],s[1]-s[0],s[2]-s[1]].map(x=>(x/1000).toFixed(1)).join(' + ')+' = '+sec(r.ms)+'</span></div>'}).join('')||'<span style=\"color:var(--mut)\">пока нет</span>';"
+"const t=g.recent.map(r=>r.ms),mx=Math.max(...t,1);q('#spark').innerHTML=t.length>1?'<polyline fill=none stroke=#e3b341 stroke-width=2 points=\"'+"
+"t.map((v,i)=>(i*300/(t.length-1)).toFixed(0)+','+(58-v/mx*54).toFixed(0)).join(' ')+'\"/>':'';"
+"q('#gch').textContent=g.challenge?'ждёт игрока':'нет';"
+"if(document.activeElement.tagName!='INPUT'&&document.activeElement.tagName!='SELECT'){q('#sg').checked=g.guard;q('#sm').checked=g.mic;q('#ss2').value=g.sleep_min}"
+"}catch(e){}}"
+"function chal(){const c=[0,1,2].map(i=>parseInt(q('#c'+i).value));"
+"if(c.some(v=>isNaN(v)||v<0||v>39)){msg('Три числа от 0 до 39');return}post('/api/challenge',{code:c});msg('Код задан');}"
+"function sset(){post('/api/settings',{guard:q('#sg').checked,mic:q('#sm').checked,sleep_min:parseInt(q('#ss2').value)})}"
+"st();scan();gs();setInterval(st,1500);setInterval(gs,5000)"
 "</script></body></html>";
 
 /* ---- Helpers ------------------------------------------------------------- */
@@ -288,13 +328,85 @@ static esp_err_t h_upload(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* ---- The game ------------------------------------------------------------------ */
+
+static esp_err_t h_stats(httpd_req_t *req)
+{
+    char *s = stats_json();
+    if (!s) {
+        return httpd_resp_send_500(req);
+    }
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    const esp_err_t err = httpd_resp_sendstr(req, s);
+    free(s);
+    return err;
+}
+
+static esp_err_t h_challenge(httpd_req_t *req)
+{
+    cJSON *j = recv_json(req);
+    if (!j) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad json");
+    }
+    if (cJSON_IsTrue(cJSON_GetObjectItem(j, "clear"))) {
+        cJSON_Delete(j);
+        stats_clear_challenge();
+        return ok(req);
+    }
+    const cJSON *code = cJSON_GetObjectItem(j, "code");
+    uint8_t c[GAME_CODE_LEN];
+    bool good = cJSON_IsArray(code) && cJSON_GetArraySize(code) == GAME_CODE_LEN;
+    for (int k = 0; good && k < GAME_CODE_LEN; k++) {
+        const cJSON *v = cJSON_GetArrayItem(code, k);
+        good = cJSON_IsNumber(v) && v->valueint >= 0 && v->valueint < GAME_POSITIONS;
+        if (good) {
+            c[k] = (uint8_t)v->valueint;
+        }
+    }
+    cJSON_Delete(j);
+    if (!good) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "three numbers 0-39");
+    }
+    stats_set_challenge(c);
+    return ok(req);
+}
+
+static esp_err_t h_settings(httpd_req_t *req)
+{
+    cJSON *j = recv_json(req);
+    if (!j) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad json");
+    }
+    const cJSON *g = cJSON_GetObjectItem(j, "guard");
+    const cJSON *m = cJSON_GetObjectItem(j, "mic");
+    const cJSON *sl = cJSON_GetObjectItem(j, "sleep_min");
+    if (cJSON_IsBool(g)) {
+        stats_set_guard(cJSON_IsTrue(g));
+    }
+    if (cJSON_IsBool(m)) {
+        stats_set_mic(cJSON_IsTrue(m));
+    }
+    if (cJSON_IsNumber(sl) && sl->valueint >= 0 && sl->valueint <= 120) {
+        stats_set_sleep_min((uint8_t)sl->valueint);
+    }
+    cJSON_Delete(j);
+    return ok(req);
+}
+
+static esp_err_t h_stats_reset(httpd_req_t *req)
+{
+    stats_reset();
+    return ok(req);
+}
+
 /* ---- Start --------------------------------------------------------------- */
 
 void web_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 12;
+    cfg.max_uri_handlers = 16;
     cfg.lru_purge_enable = true;
     cfg.recv_wait_timeout = 20;
     httpd_handle_t srv = NULL;
@@ -311,6 +423,10 @@ void web_start(void)
         { .uri = "/api/check",   .method = HTTP_POST, .handler = h_check   },
         { .uri = "/api/install", .method = HTTP_POST, .handler = h_install },
         { .uri = "/api/upload",  .method = HTTP_POST, .handler = h_upload  },
+        { .uri = "/api/stats",   .method = HTTP_GET,  .handler = h_stats   },
+        { .uri = "/api/challenge", .method = HTTP_POST, .handler = h_challenge },
+        { .uri = "/api/settings",  .method = HTTP_POST, .handler = h_settings  },
+        { .uri = "/api/stats_reset", .method = HTTP_POST, .handler = h_stats_reset },
     };
     for (size_t i = 0; i < sizeof uris / sizeof uris[0]; i++) {
         httpd_register_uri_handler(srv, &uris[i]);

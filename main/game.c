@@ -10,9 +10,9 @@
  * least min_gap apart (from the level table), so every number takes a real
  * turn to reach. Clamped: no two positions on the dial are further apart
  * than half of it, and a larger gap would never be dealt. */
-static int min_gap(int level)
+static int min_gap(const game_t *g)
 {
-    int gap = level_get(level)->min_gap;
+    int gap = game_params(g)->min_gap;
     if (gap < 1) {
         gap = 1;
     }
@@ -73,18 +73,41 @@ static void set_mode(game_t *g, game_mode_t m, uint32_t now_ms)
     g->mode_since_ms = now_ms;
 }
 
-/* Deal a new code and go back to number 1. Keeps the attempt count. */
+const level_def_t *game_params(const game_t *g)
+{
+    return level_for_play(g->play, g->level ? g->level : 1);
+}
+
+static bool fixed_code(const game_t *g)
+{
+    return g->play == PLAY_DAILY || g->play == PLAY_CHALLENGE;
+}
+
+/* Deal a new code and go back to number 1. Keeps the attempt count. Daily
+ * and Challenge deal the same code every time: that is the point of them. */
 static void deal(game_t *g, uint32_t now_ms)
 {
     int prev = game_dial_value(g);
-    const int gap = min_gap(g->level);
+    const int gap = min_gap(g);
     for (int k = 0; k < GAME_CODE_LEN; k++) {
         int v;
-        do {
-            v = (int)(rnd() % GAME_POSITIONS);
-        } while (dist(v, prev) < gap);
+        if (fixed_code(g)) {
+            v = g->fixed_code[k] % GAME_POSITIONS;
+        } else {
+            do {
+                v = (int)(rnd() % GAME_POSITIONS);
+            } while (dist(v, prev) < gap);
+        }
         g->code[k] = (uint8_t)v;
         prev = v;
+        /* A false click 3..5 detents before the number, inside the buzz but
+         * short of the number itself. */
+        const int range = game_params(g)->feel_range;
+        g->decoy[k] = 0;
+        if (game_params(g)->decoy && range > 4) {
+            const int d = 3 + (int)(rnd() % 3);
+            g->decoy[k] = (uint8_t)(d < range ? d : range - 1);
+        }
     }
     g->stage = 0;
     g->locked = 0;
@@ -99,12 +122,21 @@ uint32_t game_level_ms(int level)
     return level_get(level)->time_ms;
 }
 
+/* No clock in Practice: shown as this much left, and never runs out. */
+#define NO_LIMIT_MS (99u * 60u * 1000u)
+
 int game_next_level(const game_t *g)
 {
+    if (g->play != PLAY_CLASSIC) {
+        return 1;                       /* the other modes have no levels */
+    }
     if (g->mode == GAME_UNLOCKED) {
         return g->level >= levels_count() ? 1 : g->level + 1;
     }
-    return g->level ? g->level : 1;
+    if (g->level) {
+        return g->level;
+    }
+    return g->start_level >= 1 && g->start_level <= levels_count() ? g->start_level : 1;
 }
 
 uint32_t game_time_left_ms(const game_t *g, uint32_t now_ms)
@@ -114,7 +146,10 @@ uint32_t game_time_left_ms(const game_t *g, uint32_t now_ms)
     }
     const uint32_t end = g->finished_ms ? g->finished_ms : now_ms;
     const uint32_t used = end - g->started_ms;
-    const uint32_t limit = game_level_ms(g->level);
+    const uint32_t limit = game_params(g)->time_ms;
+    if (limit == 0) {
+        return NO_LIMIT_MS;
+    }
     return used >= limit ? 0 : limit - used;
 }
 
@@ -122,6 +157,11 @@ static unsigned start_round(game_t *g, uint32_t now_ms)
 {
     g->level = (uint8_t)game_next_level(g);
     g->timed_out = false;
+    g->loss = LOSS_WRONG;
+    g->misses = 0;
+    for (int k = 0; k < GAME_CODE_LEN; k++) {
+        g->split_ms[k] = 0;
+    }
     g->attempts = 1;
     g->started_ms = now_ms;
     g->finished_ms = 0;
@@ -144,12 +184,27 @@ static unsigned fail(game_t *g, uint32_t now_ms)
     g->on_target = false;
     g->hit_felt = false;
     g->finished_ms = now_ms;       /* freezes the clock display in the red */
+    g->loss = LOSS_WRONG;          /* callers change it for time / the guard */
     set_mode(g, GAME_WRONG, now_ms);
     return GAME_EV_WRONG;
 }
 
+/* Practice: the mistake is forgiven. The number has to be found again from
+ * here -- back up a little and come at it once more. */
+static unsigned miss(game_t *g)
+{
+    g->on_target = false;
+    g->hit_felt = false;
+    g->travel = 0;
+    if (g->misses < UINT16_MAX) {
+        g->misses++;
+    }
+    return GAME_EV_MISS;
+}
+
 static unsigned open_safe(game_t *g, uint32_t now_ms)
 {
+    g->split_ms[GAME_CODE_LEN - 1] = now_ms - g->started_ms;
     g->on_target = false;
     g->hit_felt = false;
     g->locked = GAME_CODE_LEN;
@@ -200,7 +255,7 @@ static unsigned step(game_t *g, int delta, uint32_t now_ms)
         if (g->on_target) {
             /* Kept going past the number instead of reversing on it. */
             g->timed_out = false;
-            return fail(g, now_ms);
+            return g->play == PLAY_PRACTICE ? miss(g) : fail(g, now_ms);
         }
         if (g->travel < 255) {
             g->travel++;
@@ -222,6 +277,7 @@ static unsigned step(game_t *g, int delta, uint32_t now_ms)
         return open_safe(g, now_ms);
     }
     if (g->on_target) {
+        g->split_ms[g->stage] = now_ms - g->started_ms;
         g->locked++;
         g->stage++;
         g->travel = 1;            /* this detent already counts toward the next */
@@ -232,7 +288,7 @@ static unsigned step(game_t *g, int delta, uint32_t now_ms)
     if (g->travel >= 2) {
         /* Committed to a direction, then turned back somewhere other than
          * the number. */
-        return fail(g, now_ms);
+        return g->play == PLAY_PRACTICE ? miss(g) : fail(g, now_ms);
     }
     /* A detent or two of wobble before committing is forgiven. */
     if (g->travel > 0) {
@@ -334,8 +390,19 @@ void game_resume(game_t *g, uint32_t now_ms)
 unsigned game_reset(game_t *g, uint32_t now_ms)
 {
     const uint32_t keep_rng = s_rng;
-    game_init(g, keep_rng);           /* title, level 0 (so 1 next), ticks 0 */
+    const play_t play = g->play;
+    uint8_t code[GAME_CODE_LEN];
+    for (int k = 0; k < GAME_CODE_LEN; k++) {
+        code[k] = g->fixed_code[k];
+    }
+    const uint8_t start = g->start_level;
+    game_init(g, keep_rng);           /* title, level 0, ticks 0 */
     s_rng = keep_rng;
+    g->play = play;                   /* ... but how rounds are played stays */
+    for (int k = 0; k < GAME_CODE_LEN; k++) {
+        g->fixed_code[k] = code[k];
+    }
+    g->start_level = start;
     set_mode(g, GAME_TITLE, now_ms);
     return GAME_EV_RESET;
 }
@@ -346,9 +413,11 @@ unsigned game_tick(game_t *g, uint32_t now_ms)
         now_ms - g->last_turn_ms >= GAME_OPEN_DWELL_MS) {
         return open_safe(g, now_ms);
     }
-    if (g->mode == GAME_PLAY && game_time_left_ms(g, now_ms) == 0) {
+    if (g->mode == GAME_PLAY && game_params(g)->time_ms != 0 &&
+        game_time_left_ms(g, now_ms) == 0) {
         const unsigned ev = fail(g, now_ms);
         g->timed_out = true;
+        g->loss = LOSS_TIME;
         return ev | GAME_EV_TIMEOUT;
     }
     if (g->mode == GAME_WRONG && now_ms - g->mode_since_ms >= GAME_WRONG_HOLD_MS) {
@@ -368,4 +437,48 @@ uint32_t game_elapsed_s(const game_t *g, uint32_t now_ms)
     }
     const uint32_t end = g->finished_ms ? g->finished_ms : now_ms;
     return (end - g->started_ms) / 1000u;
+}
+
+void game_set_play(game_t *g, play_t play, const uint8_t code[GAME_CODE_LEN])
+{
+    g->play = play < PLAY_COUNT ? play : PLAY_CLASSIC;
+    for (int k = 0; k < GAME_CODE_LEN; k++) {
+        g->fixed_code[k] = code ? (uint8_t)(code[k] % GAME_POSITIONS) : 0;
+    }
+}
+
+void game_set_start_level(game_t *g, int level)
+{
+    g->start_level = (uint8_t)(level >= 1 && level <= levels_count() ? level : 1);
+}
+
+unsigned game_caught(game_t *g, uint32_t now_ms)
+{
+    if (g->mode != GAME_PLAY) {
+        return GAME_EV_NONE;
+    }
+    g->timed_out = false;
+    const unsigned ev = fail(g, now_ms);
+    g->loss = LOSS_CAUGHT;
+    return ev;
+}
+
+void game_daily_code(uint32_t yyyymmdd, uint8_t out[GAME_CODE_LEN])
+{
+    /* Its own generator, seeded by the date alone, so every knob deals the
+     * same three numbers today -- with the same spacing rule as a normal
+     * deal, from the dial at rest on 0. */
+    uint32_t r = yyyymmdd * 2654435761u ^ 0x5AFEC0DEu;
+    int prev = 0;
+    for (int k = 0; k < GAME_CODE_LEN; k++) {
+        int v;
+        do {
+            r ^= r << 13;
+            r ^= r >> 17;
+            r ^= r << 5;
+            v = (int)(r % GAME_POSITIONS);
+        } while (dist(v, prev) < 5);
+        out[k] = (uint8_t)v;
+        prev = v;
+    }
 }

@@ -36,6 +36,8 @@
 #  include "app.h"
 #  include "net.h"
 #  include "net_ui.h"
+#  include "play_ui.h"
+#  include "stats.h"
 #  include "screens.h"
 #  include "ui.h"
 #endif
@@ -75,6 +77,9 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(err);
 
+#if APP_HAVE_UI
+    stats_init();                           /* progress, records, settings */
+#endif
     ESP_ERROR_CHECK(knob_board_init());
 
     if (knob_board_lock(0)) {
@@ -86,6 +91,7 @@ void app_main(void)
         lv_timer_create(ui_tick_timer_cb, 20, NULL);
         knob_board_set_rotate_callback(on_rotate, NULL);
         net_ui_init();
+        play_ui_init();
         /* Touch and hold for the menu: a deliberate hold, not LVGL's 400 ms
          * default, which a resting finger trips by accident. */
         if (knob_board_touch_indev()) {

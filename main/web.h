@@ -10,6 +10,10 @@
  *   POST /api/check    look for a newer release now
  *   POST /api/install  install the release found
  *   POST /api/upload   a firmware .bin as the raw body; installs and restarts
+ *   GET  /api/stats    progress, records, splits, ao5/ao12, Daily (stats.c)
+ *   POST /api/challenge  {"code": [a, b, c]} or {"clear": true}
+ *   POST /api/settings   {"guard": bool, "mic": bool, "sleep_min": n}
+ *   POST /api/stats_reset  forget records and progress
  */
 #pragma once
 

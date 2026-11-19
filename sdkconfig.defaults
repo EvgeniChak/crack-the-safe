@@ -66,3 +66,6 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_HTTPD_MAX_URI_LEN=512
 # Size: the app has to fit a 7.94 MB update slot (partitions.csv).
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+# LVGL keeps CPU 1 busy while an update writes flash (the cache is off for
+# both cores then); its idle task starving is expected, not a hang.
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n

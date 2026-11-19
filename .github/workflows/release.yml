@@ -30,7 +30,6 @@ jobs:
           esp_idf_version: v5.5.2
           target: esp32s3
           command: >-
-            git config --global --add safe.directory '*' &&
             idf.py build &&
             cd build &&
             esptool.py --chip esp32s3 merge_bin -o crack_the_safe_full_16MB.bin

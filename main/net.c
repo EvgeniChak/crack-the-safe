@@ -12,7 +12,6 @@
 #include "esp_app_desc.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
-#include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_log.h"
@@ -35,8 +34,8 @@ static const char *TAG = "net";
 #define NVS_PASS      "pass"
 
 #define USER_AGENT    "crack-the-safe-knob"
-#define API_LATEST    "https://api.github.com/repos/" NET_GITHUB_REPO "/releases/latest"
-#define API_MAX_BYTES (96 * 1024)
+#define RELEASES_URL  "https://github.com/" NET_GITHUB_REPO "/releases"
+#define VERSION_ASSET "version.json"
 
 /* Worker task requests. */
 #define REQ_CHECK     (1u << 0)
@@ -54,6 +53,11 @@ static bool          s_checked_once;
 static int           s_retries;
 static esp_timer_handle_t s_retry_timer;
 static esp_timer_handle_t s_check_timer;
+static esp_timer_handle_t s_ap_close_timer;
+
+/* Setup stays open this long after the knob joins its network, so the phone
+ * that set it up can still see the result. */
+#define AP_CLOSE_AFTER_US (60ull * 1000000ull)
 
 /* ---- Status ------------------------------------------------------------- */
 
@@ -182,6 +186,24 @@ static void apply_mode(void)
     }
 }
 
+static bool st_ap_on(void)
+{
+    net_status_t st;
+    net_get(&st);
+    return st.ap_on;
+}
+
+static void ap_close_cb(void *arg)
+{
+    (void)arg;
+    net_status_t st;
+    net_get(&st);
+    if (st.ap_on && st.ssid[0] && st.sta == NET_CONNECTED) {
+        ESP_LOGI(TAG, "on the network: closing setup");
+        net_setup_ap(false);
+    }
+}
+
 static void retry_cb(void *arg)
 {
     (void)arg;
@@ -221,6 +243,10 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data)
             mdns_instance_name_set("Crack the Safe knob");
             mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
             s_mdns_up = true;
+        }
+        if (st_ap_on()) {
+            esp_timer_stop(s_ap_close_timer);
+            esp_timer_start_once(s_ap_close_timer, AP_CLOSE_AFTER_US);
         }
         if (!s_checked_once) {
             s_checked_once = true;
@@ -267,64 +293,65 @@ static void http_common(esp_http_client_config_t *c, const char *url)
     c->max_redirection_count = 5;
 }
 
-/* GET the latest release; fill s_st.latest and s_asset_url. */
+/* The latest release, without GitHub's API (60 requests an hour per public
+ * IP, shared with every other device behind the same router): each release
+ * carries a tiny version.json, and github.com/.../releases/latest/download/
+ * redirects to the newest one. Fills s_st.latest and s_asset_url. */
+
+typedef struct {
+    char *buf;
+    int   len;
+    int   cap;
+} body_t;
+
+static esp_err_t on_http(esp_http_client_event_t *e)
+{
+    body_t *b = e->user_data;
+    /* Only the final answer's body: the redirects before it carry their own. */
+    if (e->event_id == HTTP_EVENT_ON_DATA && b &&
+        esp_http_client_get_status_code(e->client) == 200) {
+        const int room = b->cap - b->len;
+        const int n = e->data_len < room ? e->data_len : room;
+        memcpy(b->buf + b->len, e->data, n);
+        b->len += n;
+    }
+    return ESP_OK;
+}
+
 static esp_err_t fetch_latest(void)
 {
+    char buf[512];
+    body_t body = { .buf = buf, .cap = sizeof buf - 1 };
     esp_http_client_config_t cfg = { 0 };
-    http_common(&cfg, API_LATEST);
+    http_common(&cfg, RELEASES_URL "/latest/download/" VERSION_ASSET);
+    cfg.event_handler = on_http;
+    cfg.user_data = &body;
     esp_http_client_handle_t c = esp_http_client_init(&cfg);
     if (!c) {
         return ESP_ERR_NO_MEM;
     }
-    esp_http_client_set_header(c, "Accept", "application/vnd.github+json");
-    char *body = heap_caps_malloc(API_MAX_BYTES + 1, MALLOC_CAP_SPIRAM);
-    esp_err_t err = body ? esp_http_client_open(c, 0) : ESP_ERR_NO_MEM;
-    int n = 0;
-    if (err == ESP_OK) {
-        esp_http_client_fetch_headers(c);
-        const int status = esp_http_client_get_status_code(c);
-        if (status != 200) {
-            ESP_LOGW(TAG, "GitHub answered %d", status);
-            err = status == 404 ? ESP_ERR_NOT_FOUND : ESP_FAIL;
-        } else {
-            int r;
-            while (n < API_MAX_BYTES &&
-                   (r = esp_http_client_read(c, body + n, API_MAX_BYTES - n)) > 0) {
-                n += r;
-            }
-        }
-    }
-    esp_http_client_close(c);
+    esp_err_t err = esp_http_client_perform(c);   /* follows the redirects */
+    const int status = esp_http_client_get_status_code(c);
     esp_http_client_cleanup(c);
     if (err != ESP_OK) {
-        free(body);
         return err;
     }
-    body[n] = 0;
+    if (status != 200) {
+        ESP_LOGW(TAG, "version.json: HTTP %d", status);
+        return status == 404 ? ESP_ERR_NOT_FOUND : ESP_FAIL;
+    }
+    buf[body.len] = 0;
 
-    cJSON *root = cJSON_Parse(body);
-    free(body);
-    if (!root) {
+    cJSON *root = cJSON_Parse(buf);
+    const cJSON *ver = root ? cJSON_GetObjectItem(root, "version") : NULL;
+    if (!cJSON_IsString(ver) || ver->valuestring[0] == 0 ||
+        strlen(ver->valuestring) >= sizeof s_st.latest) {
+        cJSON_Delete(root);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    const cJSON *tag = cJSON_GetObjectItem(root, "tag_name");
-    const cJSON *assets = cJSON_GetObjectItem(root, "assets");
-    const char *url = NULL;
-    const cJSON *a;
-    cJSON_ArrayForEach(a, assets) {
-        const cJSON *name = cJSON_GetObjectItem(a, "name");
-        const cJSON *dl = cJSON_GetObjectItem(a, "browser_download_url");
-        if (cJSON_IsString(name) && cJSON_IsString(dl) &&
-            strcmp(name->valuestring, NET_RELEASE_ASSET) == 0) {
-            url = dl->valuestring;
-        }
-    }
-    if (!cJSON_IsString(tag) || !url) {
-        cJSON_Delete(root);
-        return ESP_ERR_NOT_FOUND;
-    }
-    strlcpy(s_asset_url, url, sizeof s_asset_url);
-    ST_EDIT(strlcpy(s_st.latest, tag->valuestring, sizeof s_st.latest));
+    snprintf(s_asset_url, sizeof s_asset_url, RELEASES_URL "/download/%s/" NET_RELEASE_ASSET,
+             ver->valuestring);
+    ST_EDIT(strlcpy(s_st.latest, ver->valuestring, sizeof s_st.latest));
     cJSON_Delete(root);
     return ESP_OK;
 }
@@ -492,6 +519,8 @@ void net_start(void)
     esp_timer_create(&rt, &s_retry_timer);
     const esp_timer_create_args_t ct = { .callback = check_timer_cb, .name = "upd_check" };
     esp_timer_create(&ct, &s_check_timer);
+    const esp_timer_create_args_t at = { .callback = ap_close_cb, .name = "ap_close" };
+    esp_timer_create(&at, &s_ap_close_timer);
     esp_timer_start_periodic(s_check_timer, NET_CHECK_PERIOD_H * 3600ull * 1000000ull);
 
     xTaskCreatePinnedToCore(worker, "net_upd", 8192, NULL, 3, &s_worker, 0);

@@ -107,7 +107,7 @@ The knob updates itself from this repository's GitHub releases.
 network and enter the password. From then on the settings page is at
 http://knob.local (or the IP shown on the knob).
 
-**On the knob.** Touch and hold → **Settings → Wi-Fi & Update**: network,
+**On the knob.** Touch and hold (on any screen, the title included) → **Settings → Wi-Fi & Update**: network,
 address, firmware version, **Check / Install**, and **Setup Wi-Fi** to reopen
 the access point. When a newer release turns up while the title screen is
 showing, the knob offers it: **Install** or **Later**.
@@ -123,7 +123,9 @@ git push origin v1.2.0
 ```
 
 `.github/workflows/release.yml` builds with ESP-IDF 5.5.2 and publishes the
-release with two files: `crack_the_safe.bin` (what the knob downloads) and
+release with `version.json` (how the knob learns the newest version -- not
+the GitHub API, whose 60-requests-an-hour limit is shared by everything behind
+one router), `crack_the_safe.bin` (what the knob downloads) and
 `crack_the_safe_full_16MB.bin` (bootloader + partitions + app, for a first
 flash over USB: `esptool write-flash 0 crack_the_safe_full_16MB.bin`). The
 knob compares the tag with its own version (`git describe` for local builds)

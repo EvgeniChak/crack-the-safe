@@ -34,11 +34,19 @@ static const char *TAG = "sound";
 
 static int16_t s_click[CLICK_SAMPLES];
 
-/* The click's number in the Bluetooth link's sound table. */
-#define SOUND_PIN 0
+/* The false click (levels.h: decoy): the same pin, pitched DECOY_PITCH lower
+ * -- about three semitones. Close enough to fool a quick ear; a careful one
+ * hears the difference. */
+#define DECOY_PITCH    0.84f
+static int16_t s_decoy[CLICK_SAMPLES];
 
-/* One strike starting at t0 (s), scaled by `amp`. */
-static float strike(float t, float t0, float amp, uint32_t *rng)
+/* The clicks' numbers in the Bluetooth link's sound table. */
+#define SOUND_PIN   0
+#define SOUND_DECOY 1
+
+/* One strike starting at t0 (s), scaled by `amp`; `pitch` scales every
+ * resonance (1 = the real pin). */
+static float strike(float t, float t0, float amp, float pitch, uint32_t *rng)
 {
     if (t < t0) {
         return 0.0f;
@@ -46,25 +54,26 @@ static float strike(float t, float t0, float amp, uint32_t *rng)
     const float u = t - t0;
     const float tw = 2.0f * (float)M_PI;
     /* Metal: three partials, the higher ones dying faster. */
-    const float ring = 0.50f * expf(-u / 0.0060f) * sinf(tw * 3200.0f * u)
-                     + 0.30f * expf(-u / 0.0040f) * sinf(tw * 5100.0f * u)
-                     + 0.20f * expf(-u / 0.0025f) * sinf(tw * 7400.0f * u);
+    const float ring = 0.50f * expf(-u / 0.0060f) * sinf(tw * 3200.0f * pitch * u)
+                     + 0.30f * expf(-u / 0.0040f) * sinf(tw * 5100.0f * pitch * u)
+                     + 0.20f * expf(-u / 0.0025f) * sinf(tw * 7400.0f * pitch * u);
     /* The impact: a 1-2 ms burst of noise. */
     *rng = *rng * 1664525u + 1013904223u;
     const float noise = (((float)(*rng >> 16) / 32768.0f) - 1.0f) * expf(-u / 0.0008f);
     /* Body: a low thud. */
-    const float thud = 0.45f * expf(-u / 0.0050f) * sinf(tw * 420.0f * u);
+    const float thud = 0.45f * expf(-u / 0.0050f) * sinf(tw * 420.0f * pitch * u);
     return amp * (ring + 0.8f * noise + thud);
 }
 
-static void make_click(void)
+static void make_click(int16_t *out, float pitch)
 {
     uint32_t rng = 0x2545F491u;
     float peak = 0.0f;
     static float tmp[CLICK_SAMPLES];
     for (int i = 0; i < CLICK_SAMPLES; i++) {
         const float t = (float)i / KNOB_BOARD_AUDIO_RATE;
-        tmp[i] = strike(t, 0.0f, 1.0f, &rng) + strike(t, PIN_SETTLE_MS / 1000.0f, 0.35f, &rng);
+        tmp[i] = strike(t, 0.0f, 1.0f, pitch, &rng) +
+                 strike(t, PIN_SETTLE_MS / 1000.0f, 0.35f, pitch, &rng);
         if (fabsf(tmp[i]) > peak) {
             peak = fabsf(tmp[i]);
         }
@@ -73,7 +82,7 @@ static void make_click(void)
     const float k = peak > 0.0f ? CLICK_LEVEL * 32767.0f / peak : 0.0f;
     for (int i = 0; i < CLICK_SAMPLES; i++) {
         const float fade = i > CLICK_SAMPLES - 64 ? (CLICK_SAMPLES - i) / 64.0f : 1.0f;
-        s_click[i] = (int16_t)(tmp[i] * k * fade);
+        out[i] = (int16_t)(tmp[i] * k * fade);
     }
 }
 
@@ -203,10 +212,12 @@ static void load_volume(void)
 
 void sound_init(void)
 {
-    make_click();
+    make_click(s_click, 1.0f);
+    make_click(s_decoy, DECOY_PITCH);
     make_siren();
     sfx_start();
     bt_link_set_clip(SOUND_PIN, s_click, CLICK_SAMPLES, KNOB_BOARD_AUDIO_RATE);
+    bt_link_set_clip(SOUND_DECOY, s_decoy, CLICK_SAMPLES, KNOB_BOARD_AUDIO_RATE);
     load_volume();
     apply_volume();
     ESP_LOGI(TAG, "volume %d", s_volume);
@@ -218,6 +229,15 @@ void sound_pin(void)
         bt_link_play(SOUND_PIN);
     } else {
         knob_board_audio_play(s_click, CLICK_SAMPLES);
+    }
+}
+
+void sound_decoy(void)
+{
+    if (bt_link_connected()) {
+        bt_link_play(SOUND_DECOY);
+    } else {
+        knob_board_audio_play(s_decoy, CLICK_SAMPLES);
     }
 }
 

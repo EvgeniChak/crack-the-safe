@@ -251,7 +251,7 @@ static void feel(void)
     if (g_game.stage < GAME_CODE_LEN && g_game.decoy[g_game.stage] &&
         d == g_game.decoy[g_game.stage]) {
         knob_board_haptic_pulse(FEEL_FULL, FEEL_HOLD_MS);
-        sound_pin();
+        sound_decoy();                      /* a shade lower than the real one */
         return;
     }
     if (d <= 0 || d > range) {

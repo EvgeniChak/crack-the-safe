@@ -27,6 +27,9 @@ void sound_vault_door(void);
 /** The prize behind the door at `level`: play as the result panel appears. */
 void sound_prize(int level);
 
+/** The false click: the pin's click, a little lower (levels.h: decoy). */
+void sound_decoy(void);
+
 /** The guard's footsteps, in the jack or the headphones. */
 void sound_steps(void);
 

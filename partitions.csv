@@ -1,10 +1,16 @@
-# Crack the Safe partition table -- 16 MB flash.
+# Crack the Safe partition table -- 16 MB flash, two app slots for updates
+# over Wi-Fi (see main/net.c).
 #
-# One large factory app: the unlock animation's door frames and the gold-bar
-# interior are compiled in as LVGL images, and together with LVGL 9 and the
-# embedded fonts they outgrow a 4 MB slot. No OTA -- this is flashed over USB.
+# The unlock animation's door frames and the vault art are compiled in as
+# LVGL images, so the app is ~7.6 MB: each slot is the most that two fit in
+# 16 MB, 7.94 MB. A build that outgrows it fails at link time ("app partition
+# is too small") -- then shrink the art or move it to a data partition.
 #
-# Name,     Type, SubType,  Offset,   Size,   Flags
-nvs,        data, nvs,      0x9000,   0x6000,
-phy_init,   data, phy,      0xf000,   0x1000,
-factory,    app,  factory,  0x10000,  8M,
+# nvs keeps its old place and size, so the saved volume survives the switch.
+#
+# Name,     Type, SubType,  Offset,    Size,
+nvs,        data, nvs,      0x9000,    0x6000,
+otadata,    data, ota,      0xf000,    0x2000,
+phy_init,   data, phy,      0x11000,   0x1000,
+ota_0,      app,  ota_0,    0x20000,   0x7F0000,
+ota_1,      app,  ota_1,    0x810000,  0x7F0000,

@@ -35,6 +35,11 @@ void app_menu_new_game(void);
 void app_menu_settings(void);
 /** Back out of the menu, Settings or Headphones, one screen at a time. */
 void app_back(void);
+/** The Wi-Fi & Update screen (net_ui.c), over Settings or the title. */
+void app_network_open(void);
+/** Nothing is being played: the title screen, no menu up. A good moment to
+ *  offer an update. */
+bool app_is_idle(void);
 /** Settings' Volume -/+ (and the knob, while Settings is up). */
 void app_volume_step(int steps);
 

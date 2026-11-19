@@ -13,6 +13,7 @@
 
 #include "bt_link.h"
 #include "knob_board.h"
+#include "net_ui.h"
 #include "screens.h"
 #include "sound.h"
 #include "ui.h"
@@ -81,9 +82,9 @@ int app_door_frame_at(uint32_t t)
  * of whatever the game is showing. While anything is on it the game is paused:
  * no turns, taps or ticks reach it and its clock is stopped. */
 
-typedef enum { OVER_MENU, OVER_SETTINGS, OVER_HEADPHONES } over_t;
+typedef enum { OVER_MENU, OVER_SETTINGS, OVER_HEADPHONES, OVER_NETWORK } over_t;
 
-#define OVER_MAX 3
+#define OVER_MAX 4
 static over_t s_over[OVER_MAX];
 static int s_depth;
 
@@ -92,10 +93,20 @@ static bool over_is(over_t o)
     return s_depth && s_over[s_depth - 1] == o;
 }
 
+/* Not an EEZ screen: the Wi-Fi & Update page is built in net_ui.c. */
+#define SCREEN_NETWORK (-1)
+
 static void show_screen_for_mode(void)
 {
     static int s_screen = SCREEN_ID_PAGE_TITLE;   /* ui_init() loads the first page */
     int want;
+    if (s_depth && s_over[s_depth - 1] == OVER_NETWORK) {
+        if (s_screen != SCREEN_NETWORK) {
+            net_ui_show();
+            s_screen = SCREEN_NETWORK;
+        }
+        return;
+    }
     if (s_depth) {
         switch (s_over[s_depth - 1]) {
         case OVER_MENU:     want = SCREEN_ID_PAGE_MENU;       break;
@@ -281,6 +292,19 @@ void app_back(void)
 {
     over_pop();
     ui_game_refresh();
+}
+
+void app_network_open(void)
+{
+    if (!over_is(OVER_NETWORK)) {
+        over_push(OVER_NETWORK);
+        ui_game_refresh();
+    }
+}
+
+bool app_is_idle(void)
+{
+    return s_depth == 0 && g_game.mode == GAME_TITLE;
 }
 
 void app_volume_step(int steps)

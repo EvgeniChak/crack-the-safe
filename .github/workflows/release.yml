@@ -1,0 +1,54 @@
+# Push a tag like v1.2.0 and this builds the game for the ESP32-S3 and
+# publishes a GitHub release with:
+#   crack_the_safe.bin   the app image -- what the knob downloads to update
+#   crack_the_safe_full_16MB.bin  bootloader + partitions + app, for a
+#                        first flash over USB:  esptool write-flash 0 <file>
+# The knob looks for the release asset named crack_the_safe.bin (main/net.h).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from the tag
+        if: github.ref_type == 'tag'
+        run: echo "${{ github.ref_name }}" > fw_version.txt
+
+      - name: Build (ESP-IDF v5.5.2)
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.2
+          target: esp32s3
+          command: >-
+            git config --global --add safe.directory '*' &&
+            idf.py build &&
+            cd build &&
+            esptool.py --chip esp32s3 merge_bin -o crack_the_safe_full_16MB.bin
+            --flash_mode dio --flash_freq 80m --flash_size 16MB @flash_args
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build/crack_the_safe.bin
+            build/crack_the_safe_full_16MB.bin
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/crack_the_safe.bin
+            build/crack_the_safe_full_16MB.bin
+          generate_release_notes: true

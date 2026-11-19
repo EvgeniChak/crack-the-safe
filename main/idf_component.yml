@@ -1,0 +1,3 @@
+dependencies:
+  # http://knob.local on the home network.
+  espressif/mdns: "^1.8"

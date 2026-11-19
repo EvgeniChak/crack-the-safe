@@ -55,3 +55,4 @@ firmware_backup/
 *.swp
 .DS_Store
 *.log
+fw_version.txt

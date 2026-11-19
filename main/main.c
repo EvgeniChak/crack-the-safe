@@ -12,12 +12,17 @@
  *   2. ui_init(), the dark theme, the game and the ui_tick() timer, under the
  *      lock.
  *   3. Backlight on, so the panel never shows an unpainted frame.
+ *   4. Wi-Fi, the settings page and the update checker (net.c). A freshly
+ *      updated image is confirmed only once all of this is up; if it never
+ *      gets here, the bootloader rolls back to the previous one.
  *
  * The GUI is authored in GUI/CrackTheSafe.eez-project and exported to
  * main/ui/, which is disposable.
  */
 
 #include "esp_log.h"
+#include "esp_app_desc.h"
+#include "esp_ota_ops.h"
 #include "esp_random.h"
 #include "nvs_flash.h"
 
@@ -29,6 +34,8 @@
 
 #if APP_HAVE_UI
 #  include "app.h"
+#  include "net.h"
+#  include "net_ui.h"
 #  include "screens.h"
 #  include "ui.h"
 #endif
@@ -78,6 +85,7 @@ void app_main(void)
         app_init(esp_random());
         lv_timer_create(ui_tick_timer_cb, 20, NULL);
         knob_board_set_rotate_callback(on_rotate, NULL);
+        net_ui_init();
         /* Touch and hold for the menu: a deliberate hold, not LVGL's 400 ms
          * default, which a resting finger trips by accident. */
         if (knob_board_touch_indev()) {
@@ -100,5 +108,13 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(knob_board_backlight_set(100));
-    ESP_LOGI(TAG, "up");
+
+#if APP_HAVE_UI
+    net_start();
+#endif
+
+    /* We came up: keep this image (a no-op unless it is fresh from an
+     * update and still on probation). */
+    esp_ota_mark_app_valid_cancel_rollback();
+    ESP_LOGI(TAG, "up, firmware %s", esp_app_get_description()->version);
 }

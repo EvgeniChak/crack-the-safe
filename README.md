@@ -98,6 +98,45 @@ white -- you will need to pair them with your phone again afterwards).
   to the headphones as they play. Flash both together; with an older co-processor the
   screen says **Bluetooth is not available**.
 
+## Wi-Fi and updates
+
+The knob updates itself from this repository's GitHub releases.
+
+**First setup.** With no network saved the knob opens an open access point,
+`Knob-XXXX`. Join it from a phone, open http://192.168.4.1, pick your 2.4 GHz
+network and enter the password. From then on the settings page is at
+http://knob.local (or the IP shown on the knob).
+
+**On the knob.** Touch and hold → **Settings → Wi-Fi & Update**: network,
+address, firmware version, **Check / Install**, and **Setup Wi-Fi** to reopen
+the access point. When a newer release turns up while the title screen is
+showing, the knob offers it: **Install** or **Later**.
+
+**Settings page.** Network, version, check and install, and upload of your
+own `crack_the_safe.bin` (for testing a local build without a release).
+
+**Publishing a release.**
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+`.github/workflows/release.yml` builds with ESP-IDF 5.5.2 and publishes the
+release with two files: `crack_the_safe.bin` (what the knob downloads) and
+`crack_the_safe_full_16MB.bin` (bootloader + partitions + app, for a first
+flash over USB: `esptool write-flash 0 crack_the_safe_full_16MB.bin`). The
+knob compares the tag with its own version (`git describe` for local builds)
+and only offers newer ones.
+
+**Safety.** The flash has two app slots (`partitions.csv`). A new image boots
+on probation and is confirmed once the game is up; if it crashes before that,
+the bootloader goes back to the previous one.
+
+**Size.** Each slot is 7.94 MB and the app is ~7.9 MB, almost all of it the
+door and prize images. A build that no longer fits fails with "app partition
+is too small" -- shrink or compress the art before adding much more.
+
 ## Building and flashing
 
 The board has **two microcontrollers** and this project has firmware for both.

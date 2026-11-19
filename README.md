@@ -1,4 +1,4 @@
-﻿# Crack the Safe
+# Crack the Safe
 
 A safe-cracking game for the **Waveshare ESP32-S3-Knob-Touch-LCD-1.8**: a
 360Ã—360 round touchscreen inside a detent knob, with a DRV2605 haptic motor.

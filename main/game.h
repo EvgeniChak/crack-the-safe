@@ -15,6 +15,9 @@
  * same; the safe opens when the dial is held on it for GAME_OPEN_DWELL_MS, or
  * reversed on it.
  *
+ * The clock starts on the round's first turn of the dial, not when the code
+ * is dealt: reading the screen and getting a grip is free.
+ *
  * Against the clock, in eight levels: 5:00, 2:30, 1:00, 0:30, then 0:20 for
  * levels 5-8 (halving would leave no time to turn the dial at all; from
  * level 5 the haptic "feel" range narrows instead -- app.c). Opening the safe
@@ -84,7 +87,8 @@ typedef struct {
     uint16_t attempts;                /* codes tried, including the current one */
     uint8_t  level;                   /* 1..levels_count() */
     bool     timed_out;               /* the current loss was the clock (loss == LOSS_TIME) */
-    uint32_t started_ms;              /* first code dealt in this round */
+    uint32_t started_ms;              /* the clock started: the round's first turn */
+    bool     clock_on;                /* false until that first turn */
     uint32_t finished_ms;             /* safe opened */
     uint32_t mode_since_ms;           /* when the current mode began */
     uint32_t last_turn_ms;            /* when the previous detents arrived */

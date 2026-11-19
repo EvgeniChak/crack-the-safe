@@ -144,12 +144,15 @@ uint32_t game_time_left_ms(const game_t *g, uint32_t now_ms)
     if (g->mode == GAME_TITLE || g->mode == GAME_INSTRUCTIONS) {
         return game_level_ms(1);
     }
-    const uint32_t end = g->finished_ms ? g->finished_ms : now_ms;
-    const uint32_t used = end - g->started_ms;
     const uint32_t limit = game_params(g)->time_ms;
     if (limit == 0) {
         return NO_LIMIT_MS;
     }
+    if (!g->clock_on) {
+        return limit;                   /* waiting for the first turn */
+    }
+    const uint32_t end = g->finished_ms ? g->finished_ms : now_ms;
+    const uint32_t used = end - g->started_ms;
     return used >= limit ? 0 : limit - used;
 }
 
@@ -163,7 +166,8 @@ static unsigned start_round(game_t *g, uint32_t now_ms)
         g->split_ms[k] = 0;
     }
     g->attempts = 1;
-    g->started_ms = now_ms;
+    g->started_ms = now_ms;           /* again on the first turn (game_rotate) */
+    g->clock_on = false;
     g->finished_ms = 0;
     deal(g, now_ms);
     set_mode(g, GAME_PLAY, now_ms);
@@ -321,6 +325,10 @@ unsigned game_rotate(game_t *g, int detents, uint32_t now_ms)
         return GAME_EV_NONE;      /* frozen in red until the reset */
 
     case GAME_PLAY:
+        if (!g->clock_on) {
+            g->clock_on = true;           /* the first turn starts the clock */
+            g->started_ms = now_ms;
+        }
         update_speed(g, detents, now_ms);
         /* Detent by detent: a fast spin is judged at every position it
          * crosses, so passing the number is never skipped over. */
@@ -413,7 +421,7 @@ unsigned game_tick(game_t *g, uint32_t now_ms)
         now_ms - g->last_turn_ms >= GAME_OPEN_DWELL_MS) {
         return open_safe(g, now_ms);
     }
-    if (g->mode == GAME_PLAY && game_params(g)->time_ms != 0 &&
+    if (g->mode == GAME_PLAY && g->clock_on && game_params(g)->time_ms != 0 &&
         game_time_left_ms(g, now_ms) == 0) {
         const unsigned ev = fail(g, now_ms);
         g->timed_out = true;
@@ -432,7 +440,8 @@ unsigned game_tick(game_t *g, uint32_t now_ms)
 
 uint32_t game_elapsed_s(const game_t *g, uint32_t now_ms)
 {
-    if (g->started_ms == 0 && (g->mode == GAME_TITLE || g->mode == GAME_INSTRUCTIONS)) {
+    if (!g->clock_on ||
+        (g->started_ms == 0 && (g->mode == GAME_TITLE || g->mode == GAME_INSTRUCTIONS))) {
         return 0;
     }
     const uint32_t end = g->finished_ms ? g->finished_ms : now_ms;

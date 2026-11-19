@@ -14,7 +14,8 @@ dial back at 0.
 
 ## How to play
 
-Beat the clock. The centre of the dial counts down the time left:
+Beat the clock. The centre of the dial counts down the time left -- from your
+first turn of the dial, not from when the code is dealt:
 
 | Level | Time | Prize |
 |---|---|---|

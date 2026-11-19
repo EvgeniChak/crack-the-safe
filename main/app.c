@@ -446,8 +446,8 @@ static void guard_step(void)
     const uint32_t now = app_now_ms();
     const uint32_t dt = s_last ? now - s_last : 0;
     s_last = now;
-    if (s_depth || g_game.mode != GAME_PLAY) {
-        return;                             /* paused or not playing */
+    if (s_depth || g_game.mode != GAME_PLAY || !g_game.clock_on) {
+        return;                     /* paused, not playing, or not started */
     }
     const guard_phase_t ph = guard_tick(dt);
     if (ph != s_was) {

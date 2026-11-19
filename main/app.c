@@ -455,6 +455,7 @@ static void guard_step(void)
             static const uint8_t steps[] = { FX_SOFT_BUMP, FX_PAUSE(45), FX_SOFT_BUMP,
                                              FX_PAUSE(45), FX_SOFT_BUMP };
             knob_board_haptic_sequence(steps, sizeof steps);
+            sound_steps();                  /* ... and in the ears */
         } else if (ph == GUARD_FREEZE) {
             knob_board_haptic_pulse(0, 0);  /* silence: the mic is listening */
         }

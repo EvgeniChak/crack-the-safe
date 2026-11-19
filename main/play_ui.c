@@ -175,8 +175,23 @@ static void build_screen(void)
     button(s_scr, 130, 268, 100, "Back", on_back, NULL, NULL);
 }
 
+/* The reward's title ("New Record! Level 3") in the EEZ title font is too
+ * wide for its pill and wrapped onto the code below it: one line, drawn at
+ * 70 % and centred. */
+static void shrink_reward_title(void)
+{
+    lv_obj_t *t = objects.reward_title;
+    lv_label_set_long_mode(t, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t, LV_SIZE_CONTENT);
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_set_style_transform_pivot_x(t, LV_PCT(50), 0);
+    lv_obj_set_style_transform_pivot_y(t, LV_PCT(50), 0);
+    lv_obj_set_style_transform_scale(t, 180, 0);    /* 256 = 100 % */
+}
+
 void play_ui_init(void)
 {
+    shrink_reward_title();
     build_menu_button();
     build_screen();
     lv_timer_create(timer_cb, REFRESH_MS, NULL);

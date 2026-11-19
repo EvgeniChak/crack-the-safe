@@ -242,6 +242,15 @@ void sound_vault_door(void)
     }
 }
 
+void sound_steps(void)
+{
+    const int16_t *pcm;
+    size_t n;
+    if (sfx_steps(&pcm, &n)) {
+        knob_board_audio_play(pcm, n);
+    }
+}
+
 void sound_prize(int level)
 {
     const int16_t *pcm;

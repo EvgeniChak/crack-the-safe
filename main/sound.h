@@ -27,6 +27,9 @@ void sound_vault_door(void);
 /** The prize behind the door at `level`: play as the result panel appears. */
 void sound_prize(int level);
 
+/** The guard's footsteps, in the jack or the headphones. */
+void sound_steps(void);
+
 /** Cut off whatever is playing. */
 void sound_stop(void);
 

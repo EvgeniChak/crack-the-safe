@@ -45,6 +45,7 @@ static const char *TAG = "sfx";
 
 #define DOOR_S     ((UNLOCK_DOOR_DONE_MS + 280) / 1000.0f)
 #define PRIZE_S    2.0f
+#define STEPS_S    1.3f       /* inside the guard's 1.5 s of footsteps (guard.c) */
 #define MAX_S      (DOOR_S > PRIZE_S ? DOOR_S : PRIZE_S)
 
 typedef struct {
@@ -54,6 +55,7 @@ typedef struct {
 } sfx_t;
 
 static sfx_t s_door;
+static sfx_t s_steps;
 static sfx_t s_prize[PRIZE_COUNT];
 
 /* ---- The drawing surface ------------------------------------------------ */
@@ -302,6 +304,28 @@ static void make_door(void)
     layer_end(1.0f);
 }
 
+/* The guard coming down the corridor: three footsteps, each louder than the
+ * last -- the heel's dull thud on a hard floor, then the sole's short scuff.
+ * Over by STEPS_S, so the corridor is quiet again when he stops at the door
+ * (and the microphone listens for you, not for him). */
+static void make_steps(void)
+{
+    static const float AT[3] = { 0.00f, 0.42f, 0.84f };
+    static const float LOUD[3] = { 0.45f, 0.70f, 1.00f };
+    for (int i = 0; i < 3; i++) {
+        const float t = AT[i];
+        layer_begin();
+        mode(t, 62.0f, 0.070f, 1.0f);           /* heel: the floor's thump */
+        mode(t, 150.0f, 0.045f, 0.6f);
+        mode(t, 410.0f, 0.020f, 0.25f);
+        burst(t, 0.006f, 0.5f, 0.3f);
+        layer_end(0.85f * LOUD[i]);
+        layer_begin();
+        bandnoise(t + 0.06f, t + 0.16f, 900.0f, 500.0f, 1.5f, 1.0f, 0.01f, 0.06f);
+        layer_end(0.22f * LOUD[i]);             /* sole: the scuff */
+    }
+}
+
 /* ---- The prizes ------------------------------------------------------------ */
 
 /* 1 -- Coins: a handful pouring onto the pile, thinning out as it settles. */
@@ -513,6 +537,7 @@ static void sfx_task(void *arg)
             make_gems, make_pearls, make_crown, make_diamond,
         };
         build(&s_door, DOOR_S, make_door, 0x5AFE0000u);
+        build(&s_steps, STEPS_S, make_steps, 0x5AFE00F0u);
         for (int i = 0; i < PRIZE_COUNT; i++) {
             build(&s_prize[i], PRIZE_S, prizes[i], 0x5AFE0001u + i);
         }
@@ -532,6 +557,16 @@ void sfx_start(void)
     /* Priority 1, on core 0: core 1 is LVGL's (knob_board.c), and the
      * display must not wait on this. */
     xTaskCreatePinnedToCore(sfx_task, "sfx", 4096, NULL, 1, NULL, 0);
+}
+
+bool sfx_steps(const int16_t **pcm, size_t *samples)
+{
+    if (!s_steps.ready) {
+        return false;
+    }
+    *pcm = s_steps.pcm;
+    *samples = s_steps.n;
+    return true;
 }
 
 bool sfx_door(const int16_t **pcm, size_t *samples)

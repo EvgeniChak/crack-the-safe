@@ -185,10 +185,9 @@ static void handle(unsigned ev)
     }
     if (ev & GAME_EV_WRONG) {
         /* Past the number, or out of time: the feeling stops dead (which
-         * also cuts a pulse still running), the dial flashes police lights
-         * and the siren wails. */
+         * also cuts a pulse still running) and the dial flashes police
+         * lights -- silently: the siren is off. */
         knob_board_haptic_pulse(0, 0);
-        sound_siren();       /* for as long as the police lights flash */
         ESP_LOGI(TAG, "wrong -- attempt %u, new code", g_game.attempts);
     }
     if (ev & GAME_EV_UNLOCKED) {

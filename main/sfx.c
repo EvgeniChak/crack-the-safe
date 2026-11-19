@@ -54,7 +54,7 @@ typedef struct {
 } sfx_t;
 
 static sfx_t s_door;
-static sfx_t s_prize[GAME_LEVELS];
+static sfx_t s_prize[PRIZE_COUNT];
 
 /* ---- The drawing surface ------------------------------------------------ */
 
@@ -508,12 +508,12 @@ static void sfx_task(void *arg)
     s_mix = heap_caps_malloc(max, MALLOC_CAP_SPIRAM);
     s_layer = heap_caps_malloc(max, MALLOC_CAP_SPIRAM);
     if (s_mix && s_layer) {
-        static void (*const prizes[GAME_LEVELS])(void) = {
+        static void (*const prizes[PRIZE_COUNT])(void) = {
             make_coins, make_silver, make_gold, make_cash,
             make_gems, make_pearls, make_crown, make_diamond,
         };
         build(&s_door, DOOR_S, make_door, 0x5AFE0000u);
-        for (int i = 0; i < GAME_LEVELS; i++) {
+        for (int i = 0; i < PRIZE_COUNT; i++) {
             build(&s_prize[i], PRIZE_S, prizes[i], 0x5AFE0001u + i);
         }
         ESP_LOGI(TAG, "vault sounds ready in %lld ms",
@@ -546,10 +546,14 @@ bool sfx_door(const int16_t **pcm, size_t *samples)
 
 bool sfx_prize(int level, const int16_t **pcm, size_t *samples)
 {
-    if (level < 1 || level > GAME_LEVELS || !s_prize[level - 1].ready) {
+    if (level < 1 || level > levels_count()) {
         return false;
     }
-    *pcm = s_prize[level - 1].pcm;
-    *samples = s_prize[level - 1].n;
+    const int n = (int)level_get(level)->prize;   /* 1..PRIZE_COUNT */
+    if (n < 1 || n > PRIZE_COUNT || !s_prize[n - 1].ready) {
+        return false;
+    }
+    *pcm = s_prize[n - 1].pcm;
+    *samples = s_prize[n - 1].n;
     return true;
 }

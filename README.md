@@ -1,7 +1,7 @@
-# Crack the Safe
+﻿# Crack the Safe
 
 A safe-cracking game for the **Waveshare ESP32-S3-Knob-Touch-LCD-1.8**: a
-360×360 round touchscreen inside a detent knob, with a DRV2605 haptic motor.
+360Ã—360 round touchscreen inside a detent knob, with a DRV2605 haptic motor.
 
 You find the combination by feel. Turn the knob right until it **clicks** in
 your hand, then reverse right there to lock that number in. Find the second
@@ -58,7 +58,7 @@ numbers.
 - **Touch and hold** the screen for a second, on any game screen, for the menu: **New Game**
   (back to level 1, playing straight away), **Settings**, or **Back** to carry on. The clock
   stops while the menu is open.
-- **Settings → Volume** sets how loud the click and the siren are: **Off**, then 1 to 10
+- **Settings â†’ Volume** sets how loud the click and the siren are: **Off**, then 1 to 10
   (3 to start with). Touch **-** or **+**, or turn the knob while Settings is open; each step
   plays a click at the new level. It applies to the 3.5 mm jack and to Bluetooth headphones,
   and the board remembers it when switched off.
@@ -73,7 +73,7 @@ numbers.
 ### Bluetooth headphones
 
 Touch **Headphones** on the instructions screen, or touch and hold during a game and pick
-**Settings → Headphones**. Put your headphones in pairing mode; the board searches by itself
+**Settings â†’ Headphones**. Put your headphones in pairing mode; the board searches by itself
 and lists what it finds (turn the knob or swipe to scroll). Tap yours to connect, then
 **Done**. The Headphones button turns green while they are connected.
 
@@ -187,7 +187,7 @@ shows the dial at rest on 0.
 
 ### The vault door
 
-The door opening is a 16-frame sprite (`GUI/ASSETS/art/door_00.png` …
+The door opening is a 16-frame sprite (`GUI/ASSETS/art/door_00.png` â€¦
 `door_15.png`), rendered from a generated vault-door image with a perspective
 swing about its hinge. Each frame is its own image widget on `PageUnlocked`,
 placed where that frame sits on screen. The firmware shows one frame at a
@@ -206,7 +206,7 @@ every pin, each cited to Waveshare's demo code or the schematic.
 
 | Part | Interface |
 |---|---|
-| ST77916 360×360 LCD | QSPI: CS 14, CLK 13, D0–D3 15–18, RST 21; backlight PWM on 47 |
+| ST77916 360Ã—360 LCD | QSPI: CS 14, CLK 13, D0â€“D3 15â€“18, RST 21; backlight PWM on 47 |
 | CST816 touch | I2C0 (SDA 11, SCL 12) at 0x15, INT 9, RST 10 |
 | DRV2605L haptics | I2C0 at 0x5A, driving an **LRA** open loop (~199 Hz), LRA library 6 |
 | Knob | Alps bidirectional detector switch, *not* quadrature: A on 8 (clockwise), B on 7 |
@@ -215,7 +215,7 @@ every pin, each cited to Waveshare's demo code or the schematic.
 | Battery sense | ADC1 channel 0 on GPIO1, half the supply rail (10k/10k). No charger status line, so USB power is read as "charging" (above 4.45 V) and the level is read off the cell voltage on battery |
 
 The knob's direction, the motor type, the DRV2605's waveform library and the
-LRA drive frequency can be changed in `idf.py menuconfig` → **Knob board**.
+LRA drive frequency can be changed in `idf.py menuconfig` â†’ **Knob board**.
 Waveshare's demo drives the motor as an ERM; it is an LRA (the schematic
 labels its nets `LRA_P`/`LRA_N`), and as an ERM it barely moves.
 
@@ -233,5 +233,5 @@ docs/flashing.md               flashing both chips, step by step
 
 ## License
 
-MIT, see [LICENSE](../LICENSE). Roboto is under the Apache License 2.0 and
+MIT, see [LICENSE](LICENSE). Based on [trailcurrentoss/YouTubeCodeSamples](https://github.com/trailcurrentoss/YouTubeCodeSamples/tree/main/crack_the_safe_waveshare_rotary_encoder_game). Roboto is under the Apache License 2.0 and
 Font Awesome Free under the SIL OFL 1.1.

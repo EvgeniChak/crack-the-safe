@@ -41,14 +41,12 @@ game_t g_game;
  *
  * Levels are DRV2605 real-time drive, 0..127. Each detent re-arms the hold
  * for FEEL_HOLD_MS, so the buzz also stops if the knob is left alone. */
-/* How far out the buzz starts: 10 detents up to level 4, then narrower each
- * level -- the higher levels are harder to feel, since their time limit no
- * longer halves. */
+/* How far out the buzz starts, from the level table (levels.c). At least 2:
+ * the ramp below divides by range - 1. */
 static int feel_range(void)
 {
-    static const uint8_t range[GAME_LEVELS] = { 10, 10, 10, 10, 8, 6, 5, 4 };
-    const int lv = g_game.level ? g_game.level : 1;
-    return range[(lv > GAME_LEVELS ? GAME_LEVELS : lv) - 1];
+    const int range = level_get(g_game.level ? g_game.level : 1)->feel_range;
+    return range < 2 ? 2 : range;
 }
 #define FEEL_MIN      30
 #define FEEL_MAX      100

@@ -35,10 +35,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "levels.h"
+
 #define GAME_POSITIONS   40
 #define GAME_CODE_LEN    3
 #define GAME_DEG_PER_POS (360 / GAME_POSITIONS)
-#define GAME_LEVELS      8
 
 typedef enum {
     GAME_TITLE = 0,  /* attract screen, any turn or tap shows the rules */
@@ -73,7 +74,7 @@ typedef struct {
     bool     on_target;               /* resting on code[stage], stage direction */
     bool     hit_felt;                /* ... and the player was told (HIT) */
     uint16_t attempts;                /* codes tried, including the current one */
-    uint8_t  level;                   /* 1..GAME_LEVELS */
+    uint8_t  level;                   /* 1..levels_count() */
     bool     timed_out;               /* the current loss was the clock, not a turn */
     uint32_t started_ms;              /* first code dealt in this round */
     uint32_t finished_ms;             /* safe opened */
@@ -142,7 +143,7 @@ int game_distance(const game_t *g);
 /** Seconds from the first code to now, or to the opening once unlocked. */
 uint32_t game_elapsed_s(const game_t *g, uint32_t now_ms);
 
-/** The time limit for a level, in milliseconds. */
+/** The time limit for a level, in milliseconds (from the level table). */
 uint32_t game_level_ms(int level);
 
 /** Milliseconds left on the clock: counts down in play, frozen at the

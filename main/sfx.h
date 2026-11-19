@@ -22,5 +22,6 @@ void sfx_start(void);
  */
 bool sfx_door(const int16_t **pcm, size_t *samples);
 
-/** The prize behind the door at `level` (1..GAME_LEVELS). */
+/** The prize sound for `level` (1..levels_count()): the prize its row in
+ *  the level table names. */
 bool sfx_prize(int level, const int16_t **pcm, size_t *samples);

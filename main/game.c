@@ -7,8 +7,20 @@
 #include <stdlib.h>
 
 /* Consecutive numbers (and number 1 vs the dial's resting position) are at
- * least this far apart, so every number takes a real turn to reach. */
-#define MIN_GAP 5
+ * least min_gap apart (from the level table), so every number takes a real
+ * turn to reach. Clamped: no two positions on the dial are further apart
+ * than half of it, and a larger gap would never be dealt. */
+static int min_gap(int level)
+{
+    int gap = level_get(level)->min_gap;
+    if (gap < 1) {
+        gap = 1;
+    }
+    if (gap > GAME_POSITIONS / 2) {
+        gap = GAME_POSITIONS / 2;
+    }
+    return gap;
+}
 
 static uint32_t s_rng;
 
@@ -65,11 +77,12 @@ static void set_mode(game_t *g, game_mode_t m, uint32_t now_ms)
 static void deal(game_t *g, uint32_t now_ms)
 {
     int prev = game_dial_value(g);
+    const int gap = min_gap(g->level);
     for (int k = 0; k < GAME_CODE_LEN; k++) {
         int v;
         do {
             v = (int)(rnd() % GAME_POSITIONS);
-        } while (dist(v, prev) < MIN_GAP);
+        } while (dist(v, prev) < gap);
         g->code[k] = (uint8_t)v;
         prev = v;
     }
@@ -83,23 +96,13 @@ static void deal(game_t *g, uint32_t now_ms)
 
 uint32_t game_level_ms(int level)
 {
-    static const uint32_t limit[GAME_LEVELS] = {
-        300000u, 150000u, 60000u, 30000u,      /* halving ...                   */
-        20000u, 20000u, 20000u, 20000u,        /* ... down to a 20 s floor      */
-    };
-    if (level < 1) {
-        level = 1;
-    }
-    if (level > GAME_LEVELS) {
-        level = GAME_LEVELS;
-    }
-    return limit[level - 1];
+    return level_get(level)->time_ms;
 }
 
 int game_next_level(const game_t *g)
 {
     if (g->mode == GAME_UNLOCKED) {
-        return g->level >= GAME_LEVELS ? 1 : g->level + 1;
+        return g->level >= levels_count() ? 1 : g->level + 1;
     }
     return g->level ? g->level : 1;
 }

@@ -201,13 +201,13 @@ static lv_state_t glow_state(uint32_t since_glow)
     return breathe[(step - 2) % 4];
 }
 
-static lv_obj_t *prize(int level)
+static lv_obj_t *prize(int n)
 {
-    lv_obj_t *const prizes[GAME_LEVELS] = {
+    lv_obj_t *const prizes[PRIZE_COUNT] = {
         objects.prize_1, objects.prize_2, objects.prize_3, objects.prize_4,
         objects.prize_5, objects.prize_6, objects.prize_7, objects.prize_8,
     };
-    return prizes[level - 1];
+    return prizes[n - 1];
 }
 
 static void refresh_unlocked(void)
@@ -215,10 +215,10 @@ static void refresh_unlocked(void)
     const bool open = g_game.mode == GAME_UNLOCKED;
     const uint32_t t = open ? app_unlock_ms() : 0;
 
-    /* The prize behind the door is the level's own. */
-    const int lv = g_game.level ? g_game.level : 1;
-    for (int n = 1; n <= GAME_LEVELS; n++) {
-        ui_lv_set_hidden(prize(n), n != lv);
+    /* The prize behind the door is the one the level table names. */
+    const int shown = (int)level_get(g_game.level ? g_game.level : 1)->prize;
+    for (int n = 1; n <= PRIZE_COUNT; n++) {
+        ui_lv_set_hidden(prize(n), n != shown);
     }
     const int frame = app_door_frame_at(t);
     for (int i = 0; i < UNLOCK_DOOR_FRAMES; i++) {

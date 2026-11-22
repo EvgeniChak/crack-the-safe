@@ -12,7 +12,12 @@
  */
 #pragma once
 
+#include "lvgl.h"
+
 void play_ui_init(void);
+
+/** The "Mode: ..." button on the menu page (menu_wheel.c lays it out). */
+lv_obj_t *play_ui_mode_button(void);
 
 /** Load the Mode screen (app.c's screen stack). */
 void play_ui_show(void);

@@ -38,6 +38,7 @@
 #  include "net.h"
 #  include "net_ui.h"
 #  include "launcher_ui.h"
+#  include "menu_wheel.h"
 #  include "play_ui.h"
 #  include "stats.h"
 #  include "screens.h"
@@ -99,6 +100,7 @@ void app_main(void)
         net_ui_init();
         launcher_ui_init();
         play_ui_init();
+        menu_wheel_init();
         /* Touch and hold for the menu: a deliberate hold, not LVGL's 400 ms
          * default, which a resting finger trips by accident. */
         if (knob_board_touch_indev()) {

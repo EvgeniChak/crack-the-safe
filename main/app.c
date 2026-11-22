@@ -13,6 +13,7 @@
 
 #include "bt_link.h"
 #include "knob_board.h"
+#include "menu_wheel.h"
 #include "guard.h"
 #include "net_ui.h"
 #include "play_ui.h"
@@ -276,6 +277,8 @@ void app_rotate(int detents)
             ui_game_scroll_headphones(detents);
         } else if (over_is(OVER_SETTINGS)) {
             app_volume_step(detents);        /* the knob turns the volume */
+        } else if (over_is(OVER_MENU)) {
+            menu_wheel_rotate(detents);      /* the knob picks the item */
         }
         return;                              /* the game is paused */
     }
@@ -309,6 +312,7 @@ void app_menu(void)
 {
     if (s_depth == 0) {
         knob_board_haptic(FX_DOUBLE_CLICK);
+        menu_wheel_reset();
         over_push(OVER_MENU);
         ui_game_refresh();
     }

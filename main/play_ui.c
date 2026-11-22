@@ -116,17 +116,18 @@ static void timer_cb(lv_timer_t *t)
 
 /* ---- Build ------------------------------------------------------------------- */
 
+static lv_obj_t *s_menu_button;
+
+/* The Mode item of the menu; menu_wheel.c places it with the others. */
 static void build_menu_button(void)
 {
-    /* Room for a fourth button on the menu: move the others up. */
-    lv_obj_set_y(objects.menu_title, 52);
-    lv_obj_set_y(objects.menu_new, 148);
-    lv_obj_set_y(objects.menu_settings, 200);
-    lv_obj_set_y(objects.menu_back, 252);
+    s_menu_button = button(objects.page_menu, 90, 96, 180, "Mode: Classic", on_open, NULL,
+                           &s_menu_text);
+}
 
-    lv_obj_t *b = button(objects.page_menu, 90, 96, 180, "Mode: Classic", on_open, NULL,
-                         &s_menu_text);
-    (void)b;
+lv_obj_t *play_ui_mode_button(void)
+{
+    return s_menu_button;
 }
 
 static void build_screen(void)

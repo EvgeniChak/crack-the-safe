@@ -39,7 +39,7 @@ endif()
 if(UI_CORE)
     set(APP_HAVE_UI 1)
     set(APP_SRCS "game.c" "levels.c" "app.c" "ui_game.c" "actions.c" "bt_link.c"
-                 "sound.c" "sfx.c" "net.c" "web.c" "net_ui.c" "launcher_ui.c"
+                 "sound.c" "sfx.c" "net.c" "web.c" "net_ui.c" "launcher_ui.c" "menu_wheel.c"
                  "stats.c" "guard.c" "power.c" "play_ui.c")
     # Only registered when present: ESP-IDF rejects an include directory that
     # does not exist, which would break the build the moment main/ui/ is

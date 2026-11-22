@@ -128,6 +128,24 @@ a graph, and the Daily. Everything lives in NVS (`main/stats.c`).
 minutes (settings page: 2-30 or never) the knob goes into deep sleep and
 wakes when the dial is turned. On USB it only dims.
 
+## Under the Knob Launcher
+
+The game also runs under the
+[Knob Launcher](https://github.com/EvgeniChak/knob-launcher), which downloads
+it from this repository's releases into one of its game slots.
+
+- **Back to the launcher:** touch and hold for the menu → **Launcher**, or keep
+  holding anywhere for 4 seconds (a ring fills up; let go to stay). A reset or
+  power cycle also lands in the launcher; waking from deep sleep goes straight
+  back to the game.
+- **Wi-Fi and the settings page** (stats, Challenge) work as before, on the
+  same saved network. **Updates** are the launcher's job there: the page and
+  the knob's Wi-Fi screen say so and hide Check / Install / upload, because
+  the other app slot belongs to another game.
+- **Volume** is shared with the launcher's Settings; brightness comes from it.
+- Releases must stay under the launcher's 6.4 MB slot -- the release workflow
+  checks.
+
 ## Wi-Fi and updates
 
 The knob updates itself from this repository's GitHub releases.

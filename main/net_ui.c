@@ -126,6 +126,9 @@ static void on_later(lv_event_t *e)
 
 static const char *upd_text(const net_status_t *st, char *buf, size_t n)
 {
+    if (st->launcher) {
+        return "Updates come from the launcher";
+    }
     switch (st->upd) {
     case UPD_CHECKING:   return "Checking for updates...";
     case UPD_UP_TO_DATE: return "Up to date";
@@ -178,6 +181,9 @@ static void refresh(const net_status_t *st)
     lv_label_set_text(s_btn_upd_text, st->upd == UPD_AVAILABLE ? "Install" : "Check");
     const bool busy = st->upd == UPD_CHECKING || st->upd == UPD_INSTALLING ||
                       st->upd == UPD_DONE || st->sta != NET_CONNECTED;
+    if (st->launcher) {
+        lv_obj_add_flag(s_btn_upd, LV_OBJ_FLAG_HIDDEN);
+    }
     if (busy && st->upd != UPD_AVAILABLE) {
         lv_obj_add_state(s_btn_upd, LV_STATE_DISABLED);
     } else {

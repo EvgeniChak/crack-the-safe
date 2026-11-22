@@ -14,6 +14,7 @@
 #include "freertos/task.h"
 
 #include "knob_board.h"
+#include "launcher_link.h"
 #include "net.h"
 #include "stats.h"
 
@@ -58,6 +59,7 @@ static void sleep_now(void)
     rtc_gpio_pulldown_dis(WAKE_B);
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     esp_sleep_enable_ext1_wakeup_io(mask, ESP_EXT1_WAKEUP_ANY_LOW);
+    launcher_link_before_sleep();      /* wake into the game, not the menu */
     esp_deep_sleep_start();
 }
 

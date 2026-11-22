@@ -57,6 +57,8 @@ typedef struct {
     char        latest[32];     /* latest release seen, "" before a check   */
     uint8_t     progress;       /* UPD_INSTALLING: 0..100                   */
     char        msg[64];        /* UPD_ERROR: what went wrong               */
+    bool        launcher;       /* running under the Knob Launcher: it does
+                                   the updates, this firmware does not      */
     uint32_t    serial;         /* bumps on every change, for cheap polling */
 } net_status_t;
 

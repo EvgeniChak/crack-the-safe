@@ -43,10 +43,11 @@ static const char PAGE[] =
 "<div class=r><span>Последний релиз</span><span id=lat>-</span></div>"
 "<div class=r><span>Статус</span><span id=upd>-</span></div>"
 "<progress id=pr max=100 value=0 hidden></progress>"
-"<button id=chk class=s onclick=\"post('/api/check')\">Проверить</button>"
+"<div id=own><button id=chk class=s onclick=\"post('/api/check')\">Проверить</button>"
 "<button id=ins onclick=\"post('/api/install')\" hidden>Установить</button>"
 "<p style='margin:14px 0 4px;color:var(--mut)'>Или загрузить свой .bin:</p>"
 "<input type=file id=f accept=.bin><button class=s onclick=up()>Загрузить</button></div>"
+"<p id=bylnch hidden style='color:var(--mut)'>Игру обновляет лаунчер (кнопка Update на крутилке).</p></div>"
 "<div class=c><h2>Wi-Fi</h2>"
 "<div class=r><span>Сеть</span><span id=net>-</span></div>"
 "<div class=r><span>Адрес</span><span id=ip>-</span></div>"
@@ -86,6 +87,7 @@ static const char PAGE[] =
 "body:JSON.stringify(b||{})});msg(r.ok?'':'Ошибка '+r.status)}catch(e){msg('Нет связи')}st()}"
 "async function st(){try{const s=await(await fetch('/api/status')).json();"
 "q('#ver').textContent=s.version;q('#lat').textContent=s.latest||'-';"
+"q('#own').hidden=s.launcher;q('#bylnch').hidden=!s.launcher;"
 "q('#upd').textContent=U[s.upd]+(s.upd==6&&s.msg?': '+s.msg:'');"
 "q('#ins').hidden=s.upd!=3;q('#pr').hidden=s.upd!=4;q('#pr').value=s.progress;"
 "q('#net').textContent=s.ssid?s.ssid+' ('+S[s.sta]+')':'не задана';"
@@ -178,6 +180,7 @@ static esp_err_t h_status(httpd_req_t *req)
     net_get(&s);
     cJSON *j = cJSON_CreateObject();
     cJSON_AddStringToObject(j, "version", s.version);
+    cJSON_AddBoolToObject(j, "launcher", s.launcher);
     cJSON_AddStringToObject(j, "latest", s.latest);
     cJSON_AddNumberToObject(j, "upd", s.upd);
     cJSON_AddNumberToObject(j, "progress", s.progress);
@@ -276,6 +279,12 @@ static void restart_later(void *arg)
 
 static esp_err_t h_upload(httpd_req_t *req)
 {
+    net_status_t ns;
+    net_get(&ns);
+    if (ns.launcher) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                   "Under the launcher: upload to a slot on its page");
+    }
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
     const int total = req->content_len;
     if (!part || total <= 0 || (size_t)total > part->size) {

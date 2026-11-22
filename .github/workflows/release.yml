@@ -1,8 +1,9 @@
 # Push a tag like v1.2.0 and this builds the game for the ESP32-S3 and
 # publishes a GitHub release with:
 #   crack_the_safe.bin   the app image -- what the knob downloads to update
-#   version.json         {"version": "v1.2.0"} -- how the knob learns what is
-#                        newest without GitHub's rate-limited API
+#   version.json         {"version": "v1.2.0", "size": <bytes>} -- how the
+#                        knob (and the Knob Launcher) learns what is newest
+#                        without GitHub's rate-limited API
 #   crack_the_safe_full_16MB.bin  bootloader + partitions + app, for a
 #                        first flash over USB:  esptool write-flash 0 <file>
 # The knob looks for the release asset named crack_the_safe.bin (main/net.h).
@@ -26,7 +27,6 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           echo "${{ github.ref_name }}" > fw_version.txt
-          echo '{"version": "${{ github.ref_name }}"}' > version.json
 
       - name: Build (ESP-IDF v5.5.2)
         uses: espressif/esp-idf-ci-action@v1
@@ -38,6 +38,19 @@ jobs:
             cd build &&
             esptool.py --chip esp32s3 merge_bin -o crack_the_safe_full_16MB.bin
             --flash_mode dio --flash_freq 80m --flash_size 16MB @flash_args
+
+      - name: version.json, and the Knob Launcher's slot size
+        run: |
+          size=$(stat -c %s build/crack_the_safe.bin)
+          # A Knob Launcher game slot is 0x670000 bytes (knob-launcher/partitions.csv).
+          if [ "$size" -gt $((0x670000)) ]; then
+            echo "::error::crack_the_safe.bin is $size bytes, over the launcher's 6.4 MB game slot"
+            exit 1
+          fi
+          if [ "${{ github.ref_type }}" = tag ]; then
+            echo "{\"version\": \"${{ github.ref_name }}\", \"size\": $size}" > version.json
+            cat version.json
+          fi
 
       - name: Upload build
         uses: actions/upload-artifact@v4

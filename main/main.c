@@ -27,6 +27,7 @@
 #include "nvs_flash.h"
 
 #include "knob_board.h"
+#include "launcher_link.h"
 
 #ifndef APP_HAVE_UI
 #  error "APP_HAVE_UI is not defined -- main/CMakeLists.txt must set it"
@@ -36,6 +37,7 @@
 #  include "app.h"
 #  include "net.h"
 #  include "net_ui.h"
+#  include "launcher_ui.h"
 #  include "play_ui.h"
 #  include "stats.h"
 #  include "screens.h"
@@ -80,6 +82,10 @@ void app_main(void)
 #if APP_HAVE_UI
     stats_init();                           /* progress, records, settings */
 #endif
+    /* Under the Knob Launcher: confirm this image and send the next boot
+     * back to the menu. Standalone: nothing (confirmed at the end, below). */
+    launcher_link_init();
+
     ESP_ERROR_CHECK(knob_board_init());
 
     if (knob_board_lock(0)) {
@@ -91,6 +97,7 @@ void app_main(void)
         lv_timer_create(ui_tick_timer_cb, 20, NULL);
         knob_board_set_rotate_callback(on_rotate, NULL);
         net_ui_init();
+        launcher_ui_init();
         play_ui_init();
         /* Touch and hold for the menu: a deliberate hold, not LVGL's 400 ms
          * default, which a resting finger trips by accident. */
@@ -113,7 +120,8 @@ void app_main(void)
         knob_board_unlock();
     }
 
-    ESP_ERROR_CHECK(knob_board_backlight_set(100));
+    ESP_ERROR_CHECK(knob_board_backlight_set(
+        launcher_link_present() ? launcher_link_brightness() : 100));
 
 #if APP_HAVE_UI
     net_start();

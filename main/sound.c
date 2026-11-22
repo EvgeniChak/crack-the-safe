@@ -12,6 +12,8 @@
 #include "esp_log.h"
 #include "nvs.h"
 
+#include "launcher_link.h"
+
 #include "bt_link.h"
 #include "game.h"
 #include "knob_board.h"
@@ -161,8 +163,13 @@ static void make_siren(void)
  * SOUND_VOLUME_DEFAULT, is quieter than that. Saved to NVS on every change,
  * so a power cut straight after one cannot lose it -- a byte, a few times a
  * minute at most, which NVS's wear levelling shrugs off. */
-#define NVS_NS       "sound"
-#define NVS_KEY      "volume"
+/* The Knob Launcher's shared volume ("sys"/"vol", the same 0..10 scale), so
+ * its Settings and this game's set the same thing -- with or without the
+ * launcher. The old "sound"/"volume" is still read once, as a fallback. */
+#define NVS_NS       LAUNCHER_NVS_NS
+#define NVS_KEY      LAUNCHER_KEY_VOLUME
+#define NVS_NS_OLD   "sound"
+#define NVS_KEY_OLD  "volume"
 #define UNITY_LEVEL  7
 
 static int s_volume = SOUND_VOLUME_DEFAULT;
@@ -196,15 +203,22 @@ static void save_volume(void)
     }
 }
 
-static void load_volume(void)
+static bool read_u8(const char *ns, const char *key, uint8_t *v)
 {
     nvs_handle_t h;
-    uint8_t v;
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        if (nvs_get_u8(h, NVS_KEY, &v) == ESP_OK && v <= SOUND_VOLUME_MAX) {
-            s_volume = v;
-        }
+    bool ok = false;
+    if (nvs_open(ns, NVS_READONLY, &h) == ESP_OK) {
+        ok = nvs_get_u8(h, key, v) == ESP_OK && *v <= SOUND_VOLUME_MAX;
         nvs_close(h);
+    }
+    return ok;
+}
+
+static void load_volume(void)
+{
+    uint8_t v;
+    if (read_u8(NVS_NS, NVS_KEY, &v) || read_u8(NVS_NS_OLD, NVS_KEY_OLD, &v)) {
+        s_volume = v;
     }
 }
 

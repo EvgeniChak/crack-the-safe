@@ -27,6 +27,7 @@
 #include "mdns.h"
 #include "nvs.h"
 
+#include "launcher_link.h"
 #include "web.h"
 
 static const char *TAG = "net";
@@ -258,7 +259,7 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data)
             esp_timer_stop(s_ap_close_timer);
             esp_timer_start_once(s_ap_close_timer, AP_CLOSE_AFTER_US);
         }
-        if (!s_checked_once) {
+        if (!s_checked_once && !s_st.launcher) {
             s_checked_once = true;
             net_check_update();
         }
@@ -368,6 +369,9 @@ static esp_err_t fetch_latest(void)
 
 static void do_check(void)
 {
+    if (s_st.launcher) {
+        return;                             /* the launcher updates this game */
+    }
     net_status_t st;
     net_get(&st);
     if (st.sta != NET_CONNECTED) {
@@ -396,6 +400,9 @@ static void do_check(void)
 
 static void do_install(void)
 {
+    if (s_st.launcher) {
+        return;
+    }
     net_status_t st;
     net_get(&st);
     if (st.upd != UPD_AVAILABLE || !s_asset_url[0]) {
@@ -531,7 +538,12 @@ void net_start(void)
     esp_timer_create(&ct, &s_check_timer);
     const esp_timer_create_args_t at = { .callback = ap_close_cb, .name = "ap_close" };
     esp_timer_create(&at, &s_ap_close_timer);
-    esp_timer_start_periodic(s_check_timer, NET_CHECK_PERIOD_H * 3600ull * 1000000ull);
+    /* Under the Knob Launcher the other app slot belongs to another game:
+     * no updates from here, the launcher does them. */
+    s_st.launcher = launcher_link_present();
+    if (!s_st.launcher) {
+        esp_timer_start_periodic(s_check_timer, NET_CHECK_PERIOD_H * 3600ull * 1000000ull);
+    }
 
     xTaskCreatePinnedToCore(worker, "net_upd", 8192, NULL, 3, &s_worker, 0);
 

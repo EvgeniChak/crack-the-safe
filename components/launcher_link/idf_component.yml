@@ -1,0 +1,7 @@
+﻿version: "0.1.1"
+description: "Link a game to the Knob Launcher: exit to the launcher, shared settings."
+dependencies:
+  idf: ">=5.4"
+  # No LVGL here on purpose: the game brings its own, pinned to the version
+  # its UI was generated for. A second range here made the component manager
+  # drop this component on GitHub Actions (two solving passes disagreed).

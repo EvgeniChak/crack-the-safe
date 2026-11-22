@@ -1,7 +1,7 @@
-dependencies:
+﻿dependencies:
   # http://knob.local on the home network.
   espressif/mdns: "^1.8"
-  # The way back to the Knob Launcher, and its shared settings.
-  launcher_link:
-    git: https://github.com/EvgeniChak/knob-launcher.git
-    path: components/launcher_link
+# launcher_link (the way back to the Knob Launcher) is a copy in
+# components/launcher_link, from EvgeniChak/knob-launcher -- like knob_board.
+# Pulled in as a git dependency, the component manager on GitHub Actions
+# dropped it on its second solving pass.
